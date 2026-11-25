@@ -2,9 +2,13 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
   pull_request:
 
+# Every credential below is a throwaway value scoped to this workflow run's
+# ephemeral service containers — nothing here is a real secret, and this
+# workflow never connects to a production database or uses production
+# credentials of any kind.
 env:
   DATABASE_URL: postgresql://clientos:clientos_ci_password@localhost:5432/clientos
   REDIS_URL: redis://localhost:6379
@@ -23,6 +27,21 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
       - run: pnpm typecheck
+      # Schema-only check — does not require a reachable database.
+      - run: pnpm exec prisma validate
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # Fails the build on high/critical known vulnerabilities in dependencies.
+      - run: pnpm audit --audit-level high
 
   test:
     runs-on: ubuntu-latest
@@ -60,7 +79,7 @@ jobs:
 
   build:
     runs-on: ubuntu-latest
-    needs: [lint-and-typecheck, test]
+    needs: [lint-and-typecheck, security, test]
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4

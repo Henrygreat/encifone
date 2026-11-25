@@ -4,6 +4,16 @@ _Last updated: 2026-11-25_
 
 > Rebranded from the working name "ClientOS AI" to **EncifOne** during the GitHub-integration pass (see "GitHub integration & branding" below). No database tables, Docker volumes, migration files, or other internal identifiers were renamed as part of this — see that section for exactly what was and wasn't touched, and why.
 
+## GitHub integration & branding
+
+- **Repository:** https://github.com/Henrygreat/encifone — connected as `origin`. The remote was empty when connected (no pre-existing commits/branches), so the full local history was pushed directly; nothing was force-pushed or overwritten.
+- **Branching:** `main` (stable/production-ready, tagged releases) and `develop` (ongoing integration) both exist and track their remotes. `feature/*` and `hotfix/*` are the conventions for new work — see `CLAUDE.md` §"Git workflow".
+- **Tag `v0.1.0`** marks the Phase 1 foundation commit on `main` — its acceptance criteria (below) were verified before tagging.
+- **Rebrand:** "ClientOS AI" → **EncifOne**, centralised in `src/config/branding.ts` and propagated to page metadata, auth pages, the sidebar header, worker logs, and all documentation.
+- **Deliberately left unchanged** (to avoid data loss / unnecessary churn): the Docker Compose project name (`clientos-ai` — renaming it would create new Docker volumes and orphan the existing Postgres data directory), the Postgres role/database name (`clientos`) already initialised in that volume, the active-org cookie key (`clientos_active_org` — an internal, never user-visible identifier), and every Prisma model name and the existing migration folder/file. None of these are customer-facing branding.
+- **CI additions for this pass:** `prisma validate` (schema-only, no DB needed) and a `pnpm audit --audit-level high` job, both gating the `build` job. Neither requires production credentials or touches a production database — see the comment at the top of `.github/workflows/ci.yml`.
+- **Dependency security:** a high-severity transitive advisory (`effect`, pulled in via `prisma`/`@prisma/config`) was fixed with a pinned override in `pnpm-workspace.yaml` (`overrides: effect: ^3.22.1`). One moderate advisory remains (`minimatch` via `shadcn`'s CLI tooling, dev-only, not part of the runtime bundle) — accepted as non-blocking; revisit if `shadcn` ships a fix.
+
 ## Current phase: Phase 1 — Foundations & scaffolding (complete)
 
 ### Completed and verified
@@ -13,7 +23,7 @@ _Last updated: 2026-11-25_
 - PostgreSQL via Prisma 7 (pg driver adapter — see `prisma.config.ts` / `src/lib/prisma.ts`), Redis via ioredis, BullMQ worker process.
 - Docker Compose stack (`postgres`, `redis`, `migrate`, `app`, `worker`) — **verified**: `docker compose up -d --build` brings up all four services from a clean build, migrations run automatically via the `migrate` one-shot service, `/api/health` reports both Postgres and Redis reachable.
 - Multi-stage `Dockerfile` producing a standalone Next.js runtime image and a separate worker image.
-- GitHub Actions CI (`.github/workflows/ci.yml`): lint, typecheck, test (with Postgres/Redis service containers + migration), build.
+- GitHub Actions CI (`.github/workflows/ci.yml`): dependency install, lint, typecheck, Prisma schema validation, dependency security audit, test (with Postgres/Redis service containers + migration), build. No job uses production credentials or a production database.
 - Environment validation at boot (`src/lib/env.ts`, zod-based, fails fast on missing/malformed config).
 
 **Identity & multi-tenancy**

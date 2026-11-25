@@ -1,3 +1,8 @@
+overrides:
+  # Transitive dependency of prisma/@prisma/config — pins past a known
+  # ReDoS advisory (GHSA-7589-6fvf-x4pw) without jumping to effect's
+  # incompatible v4 major.
+  effect: ^3.22.1
 allowBuilds:
   '@prisma/engines': true
   esbuild: true

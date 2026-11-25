@@ -1,6 +1,8 @@
 # Deployment — EncifOne
 
-> Not yet executable — this documents the planned deployment approach for Phase 1 scaffolding to implement against.
+> Local Docker Compose deployment is implemented and verified (see `docs/IMPLEMENTATION_STATUS.md`). Coolify/production deployment is **not yet performed** — this section documents the approach to follow when it is.
+>
+> **EncifOne is Coolify-only.** There is no Vercel deployment, no Vercel-specific configuration, and nothing in the stack depends on a Vercel-only feature (Edge Config, KV, Blob, etc.) — see `CLAUDE.md`'s "Deployment target" rule.
 
 ## 1. Local development
 
@@ -19,13 +21,26 @@
 - `postgres`, `redis` — standard images, named volumes for persistence.
 - Reverse proxy (`Traefik` or `Nginx`) terminates TLS, routes to `app`; Cloudflare in front for DNS/CDN/WAF where used.
 
-## 4. Coolify compatibility
+## 4. Coolify deployment
 
 Standard `Dockerfile` + `docker-compose.yml` with no platform-specific extensions, so the stack deploys on Coolify or any Docker-host target without modification.
 
-## 5. CI/CD (GitHub Actions)
+Readiness checklist (deployment itself is a deliberate later step — not performed yet):
+- [x] `Dockerfile` builds `app` and `worker` targets independently; `docker compose up -d --build` verified locally (all four services healthy, migrations run automatically via the `migrate` one-shot service).
+- [x] No Vercel-specific code, config, or env vars anywhere in the repo.
+- [ ] Point a Coolify "Docker Compose" resource at this repository (private GitHub repo — Coolify authenticates via a deploy key/GitHub App, which is independent of this being a private repo).
+- [ ] Set real environment variables in Coolify (never commit them) — see `.env.example` for the full list; at minimum `DATABASE_URL`, `REDIS_URL`, `AUTH_SECRET` must be production values, not the dev defaults baked into `docker-compose.yml`.
+- [ ] Confirm Coolify (or a fronting Cloudflare proxy) terminates HTTPS and forwards to the `app` service's port 3000 — the app itself doesn't terminate TLS.
+- [ ] Confirm the `postgres_data`/`redis_data` named volumes are on persistent storage in Coolify's host, not ephemeral.
+- [ ] Point Cloudflare DNS at the Coolify host/IP; Cloudflare proxy mode and Coolify-managed HTTPS (e.g. via Let's Encrypt) are both compatible with this setup out of the box.
+- [ ] Wire the `migrate` service (or an equivalent Coolify deployment hook) to run before `app` starts on every deploy, as it does locally.
 
-Pipeline stages: install → lint → typecheck → unit/integration tests → build → (on merge to main) build & push image → deploy → run `prisma migrate deploy` → health check → rollback on failure.
+## 5. Source control & CI/CD
+
+- **Repository:** https://github.com/Henrygreat/encifone (private).
+- **Branches:** `main` (stable, tagged releases) ← merged from `develop` ← merged from `feature/*`/`hotfix/*`. See `CLAUDE.md` §"Git workflow".
+- **CI** (`.github/workflows/ci.yml`, runs on push to `main`/`develop` and on every PR): install → lint → typecheck → `prisma validate` → `pnpm audit` (dependency security) → tests (against ephemeral Postgres/Redis service containers, no production credentials) → build. The `build` job only runs once lint/typecheck, security, and tests have all passed.
+- **CD** (not yet implemented): on merge to `main`, build & push the image → trigger a Coolify deploy → the `migrate` service runs `prisma migrate deploy` → health check → rollback on failure.
 
 ## 6. Backups & recovery
 
