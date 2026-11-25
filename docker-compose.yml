@@ -32,9 +32,7 @@ services:
         required: false
     environment:
       DATABASE_URL: ${DATABASE_URL}
-      REDIS_URL: redis://redis:6379  # unused by `prisma migrate deploy`, set for consistency
-    # Direct binary call — `pnpm exec` would otherwise make outbound
-    # registry calls on every run just to verify the lockfile.
+      REDIS_URL:  ${REDIS_URL}
     command: ["node_modules/.bin/prisma", "migrate", "deploy"]
     restart: "no"
 
