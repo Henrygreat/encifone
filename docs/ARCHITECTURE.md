@@ -84,13 +84,14 @@ See `docs/AI_ARCHITECTURE.md` for the full design. Summary: a single `ai-gateway
 
 ## 7. Infrastructure & deployment
 
-- Docker Compose for local dev and small production deploys (app, Postgres, Redis, worker, optional local model runner).
+- **Database standard: PostgreSQL 18 + pgvector** (`pgvector/pgvector:pg18` image locally; a separately-provisioned Coolify-managed PostgreSQL 18 + pgvector instance in production — see `docs/DECISION_LOG.md` and `docs/DEPLOYMENT.md` §4). pgvector is enabled via migration now so semantic search/RAG/AI-memory modules (`docs/MASTER_ROADMAP.md` Phase 11+) have the extension ready when they arrive — no vector columns or AI tables exist yet.
+- Docker Compose for local dev and small production deploys (app, Redis, worker; Postgres only in local dev — production Postgres is external, not a container this repo defines). See `docker-compose.yml` (base/production-safe) + `docker-compose.local.yml` (adds the local Postgres container).
 - Coolify-compatible: standard Dockerfile + compose, no platform-specific lock-in.
 - Reverse proxy via Traefik or Nginx; Cloudflare in front for DNS/CDN/WAF.
 - CI/CD via GitHub Actions: lint → typecheck → test → build → migrate (on deploy) → deploy.
 - Health checks (`/api/health`) covering DB, Redis, and queue connectivity; structured JSON logging; error monitoring via Sentry-compatible SDK.
 - Scaling path: stateless app containers behind the proxy scale horizontally first; Postgres read replicas and a dedicated worker fleet come next; only split out a service (e.g. AI agent execution) if its resource profile genuinely diverges from the app tier. Kubernetes is deferred until multi-region or very high scale needs justify the operational cost.
-- Target initial footprint: runs on a single 4–8 vCPU / 8–16GB VPS for early customers (see `docs/ROADMAP.md` §Infra costs).
+- Target initial footprint: runs on a single 4–8 vCPU / 8–16GB VPS for early customers (see `docs/MASTER_ROADMAP.md` §Infra costs).
 
 ## 8. Key architectural risks & mitigations
 

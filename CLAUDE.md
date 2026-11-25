@@ -21,10 +21,11 @@ Branding (product name, taglines) is centralised in `src/config/branding.ts` —
 9. **Never reset, drop, or truncate a database without explicit human approval for that specific action.** This includes `prisma migrate reset`, `docker compose down -v`, and manual `DROP`/`TRUNCATE`. Destructive migrations need a reviewed backfill/rollback plan first.
 10. **Preserve existing working functionality.** A new phase extends the product; it does not regress a previously-working flow. If a change must break something, say so explicitly and get confirmation first.
 11. **Maintain a premium, modern enterprise UI.** Follow `docs/DESIGN_SYSTEM.md` — no generic admin-template look, no unstyled fallback states shipped as "done."
+12. **Database standard: PostgreSQL 18 + pgvector, everywhere.** Locally: `pgvector/pgvector:pg18` via `docker-compose.local.yml`. Production: a separately-provisioned Coolify-managed PostgreSQL 18 + pgvector instance — this repo's compose files never define a production Postgres container. See `docs/DECISION_LOG.md`. Never mount an older major version's data directory/volume into a newer Postgres major-version image (PG18's images changed `PGDATA`/`VOLUME` to `/var/lib/postgresql/18/docker` and `/var/lib/postgresql` respectively — see `docs/DEPLOYMENT.md` §3) — always back up, restore into a new volume, and validate before retiring the old one.
 
 ## How to work a task
 
-1. Check `docs/IMPLEMENTATION_STATUS.md` and `docs/ROADMAP.md` for current phase and what's already done.
+1. Check `docs/IMPLEMENTATION_STATUS.md` and `docs/MASTER_ROADMAP.md` for current phase and what's already done.
 2. Work one module/phase at a time — don't spread a change across unrelated domains.
 3. For a new feature: confirm DB model → service layer (with authorization) → API route → UI. Don't build UI against an imagined API.
 4. Before marking anything done: lint, typecheck, relevant tests, migration check, build, and a quick manual pass of the UI. Update `docs/IMPLEMENTATION_STATUS.md`.
@@ -51,12 +52,14 @@ Branding (product name, taglines) is centralised in `src/config/branding.ts` —
 ## Deployment target
 
 - Self-hosted via **Coolify** (Docker Compose-based). See `docs/DEPLOYMENT.md`.
+- `docker-compose.yml` is the production-safe base (no Postgres container, no public Redis port) — this is the file Coolify points at. `docker-compose.local.yml` is a local-only addition (adds the local Postgres container, republishes ports); always run both together locally (`pnpm docker:local ...`), and never point Coolify/production at the local file.
+- Keep Postgres and Redis unreachable from the public internet in both environments — no published host ports in the base file for either.
 - **Never introduce a mandatory Vercel-only dependency** (e.g. Vercel KV/Blob/Edge Config, `next.config` options that only work on Vercel's platform). Anything the app depends on must run in a plain Docker container.
 - Cloudflare in front (DNS/CDN) and Coolify-managed HTTPS/reverse-proxy are both compatible by design — don't add anything that assumes a different edge/proxy layer.
 
 ## What not to do
 
-- Don't implement every module in this backlog at once. Follow the phase plan in `docs/ROADMAP.md`.
+- Don't implement every module in this backlog at once. Follow the phase plan in `docs/MASTER_ROADMAP.md`.
 - Don't add a new AI provider SDK call outside the AI gateway abstraction.
 - Don't add a dependency not already listed in `docs/ARCHITECTURE.md`'s stack without flagging it.
 - Don't claim an integration (Stripe, Xero, WhatsApp, etc.) works until it's been exercised against that provider's sandbox/test mode.

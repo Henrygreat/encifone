@@ -34,7 +34,7 @@ export function Sidebar({ collapsed }: { collapsed: boolean }) {
                   <div
                     key={item.label}
                     className="flex items-center justify-between rounded-md px-2 py-1.5 text-sm text-sidebar-foreground/40"
-                    title="Not available yet — see docs/ROADMAP.md"
+                    title="Not available yet — see docs/MASTER_ROADMAP.md"
                   >
                     <span>{item.label}</span>
                     <span className="rounded-full border border-sidebar-border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-sidebar-foreground/40">

@@ -1,31 +1,20 @@
 name: clientos-ai
 
-services:
-  postgres:
-    image: postgres:16-alpine
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:-clientos}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-clientos_dev_password}
-      POSTGRES_DB: ${POSTGRES_DB:-clientos}
-    ports:
-      # Host port is remapped to avoid colliding with any other local Postgres
-      # (e.g. another project's stack already using 5432) — containers still
-      # talk to each other over the default 5432 on the internal network.
-      - "${POSTGRES_HOST_PORT:-5433}:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-clientos}"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
+# Production/Coolify base file. Deliberately has NO `postgres` service:
+# production uses a separately-provisioned Coolify-managed PostgreSQL 18 +
+# pgvector instance (DATABASE_URL points at it) — see docs/DEPLOYMENT.md §4.
+# Redis publishes no host port here, so it's reachable only from the other
+# containers on this compose network, never from the public internet.
+#
+# For local development, run with the local override added:
+#   docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build
+# (or `pnpm docker:local` — see package.json), which adds a local
+# PostgreSQL 18 + pgvector container and republishes ports for host access.
 
+services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
-    ports:
-      - "${REDIS_HOST_PORT:-6380}:6379"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -38,12 +27,12 @@ services:
     build:
       context: .
       target: deps
-    env_file: .env
+    env_file:
+      - path: .env
+        required: false
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-clientos}:${POSTGRES_PASSWORD:-clientos_dev_password}@postgres:5432/${POSTGRES_DB:-clientos}
-    depends_on:
-      postgres:
-        condition: service_healthy
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_URL: redis://redis:6379  # unused by `prisma migrate deploy`, set for consistency
     # Direct binary call — `pnpm exec` would otherwise make outbound
     # registry calls on every run just to verify the lockfile.
     command: ["node_modules/.bin/prisma", "migrate", "deploy"]
@@ -54,15 +43,15 @@ services:
       context: .
       target: app
     restart: unless-stopped
-    env_file: .env
+    env_file:
+      - path: .env
+        required: false
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-clientos}:${POSTGRES_PASSWORD:-clientos_dev_password}@postgres:5432/${POSTGRES_DB:-clientos}
-      REDIS_URL: redis://redis:6379
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_URL: redis://redis:6379  # internal service name, constant across environments
     ports:
       - "3000:3000"
     depends_on:
-      postgres:
-        condition: service_healthy
       redis:
         condition: service_healthy
       migrate:
@@ -73,18 +62,17 @@ services:
       context: .
       target: worker
     restart: unless-stopped
-    env_file: .env
+    env_file:
+      - path: .env
+        required: false
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-clientos}:${POSTGRES_PASSWORD:-clientos_dev_password}@postgres:5432/${POSTGRES_DB:-clientos}
-      REDIS_URL: redis://redis:6379
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_URL: redis://redis:6379  # internal service name, constant across environments
     depends_on:
-      postgres:
-        condition: service_healthy
       redis:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
 
 volumes:
-  postgres_data:
   redis_data:

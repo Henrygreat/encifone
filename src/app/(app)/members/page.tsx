@@ -97,7 +97,7 @@ export default function MembersPage() {
             <DialogHeader>
               <DialogTitle>Invite a team member</DialogTitle>
               <DialogDescription>
-                No email provider is configured yet (docs/ROADMAP.md) — you&apos;ll get a link to
+                No email provider is configured yet (docs/MASTER_ROADMAP.md) — you&apos;ll get a link to
                 share with them directly.
               </DialogDescription>
             </DialogHeader>

@@ -4,7 +4,7 @@ import { branding } from "@/config/branding";
 
 /**
  * Minimal placeholder landing page. The full marketing site (docs/PRODUCT_REQUIREMENTS.md
- * §6, docs/ROADMAP.md Phase 6+) is explicitly out of scope for Phase 1 — this
+ * §6, docs/MASTER_ROADMAP.md Phase 6+) is explicitly out of scope for Phase 1 — this
  * exists only so the root route isn't the Next.js starter page.
  */
 export default function MarketingHome() {

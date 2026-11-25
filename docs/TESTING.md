@@ -2,7 +2,7 @@
 
 ## 1. Principle
 
-A feature is not complete unless its interface, backend, database, permissions, error handling, and tests are all implemented — per `CLAUDE.md`. Acceptance criteria are defined per phase in `docs/ROADMAP.md` before implementation starts, not retrofitted after.
+A feature is not complete unless its interface, backend, database, permissions, error handling, and tests are all implemented — per `CLAUDE.md`. Acceptance criteria are defined per phase in `docs/MASTER_ROADMAP.md` before implementation starts, not retrofitted after.
 
 ## 2. Test layers
 
@@ -25,7 +25,7 @@ A feature is not complete unless its interface, backend, database, permissions, 
 
 ## 3. Per-phase acceptance
 
-Each phase in `docs/ROADMAP.md` lists concrete acceptance criteria tied to the vertical-slice journey. A phase is not marked done in `docs/IMPLEMENTATION_STATUS.md` until its criteria pass in CI (or, for manual categories like accessibility/backup drills, are explicitly logged as checked).
+Each phase in `docs/MASTER_ROADMAP.md` lists concrete acceptance criteria tied to the vertical-slice journey. A phase is not marked done in `docs/IMPLEMENTATION_STATUS.md` until its criteria pass in CI (or, for manual categories like accessibility/backup drills, are explicitly logged as checked).
 
 ## 4. What "done" requires, every time
 

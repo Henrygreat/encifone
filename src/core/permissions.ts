@@ -1,7 +1,7 @@
 import { MembershipRole } from "@prisma/client";
 
 /**
- * Phase 1 capability set. This grows module-by-module (see docs/ROADMAP.md) —
+ * Phase 1 capability set. This grows module-by-module (see docs/MASTER_ROADMAP.md) —
  * it is deliberately not pre-populated with capabilities for modules that
  * don't exist yet.
  */

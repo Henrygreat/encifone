@@ -27,6 +27,14 @@ Scope: repo scaffolding (Next.js + TS strict + Tailwind + shadcn/ui), Prisma sch
 - `docker compose up` brings up app+DB+Redis+worker locally from a clean clone, migrations run automatically.
 - CI pipeline passes on a clean PR: lint, typecheck, unit tests, build.
 
+### Phase 1.1 — GitHub integration, branding, and database standardisation (complete)
+Scope: connected the repository to GitHub (`main`/`develop` branching, CI), rebranded ClientOS AI → EncifOne, and standardised the database on **PostgreSQL 18 + pgvector** (`pgvector/pgvector:pg18` locally; a separately-provisioned Coolify-managed instance in production) ahead of the Knowledge Base/RAG phases — extension enabled via migration only, no AI tables yet. Full record in `docs/DECISION_LOG.md` and `docs/IMPLEMENTATION_STATUS.md`.
+**Acceptance criteria:**
+- GitHub remote connected, `main`/`develop` pushed, `v0.1.0` tagged, no force-push/history loss.
+- Existing local database data preserved and validated across the PG16→PG18 migration (row-count + migration-history comparison); old volume/backup retained pending approval to delete.
+- Production compose path (`docker-compose.yml` alone) defines no Postgres container and publishes no public port for Postgres/Redis.
+- Lint, typecheck, `prisma validate`, dependency audit, automated tests, and both local and Docker production builds all pass against PostgreSQL 18 + pgvector.
+
 ### Phase 2 — CRM + Sales minimal + Proposal/Contract + Payment (deposit)
 Scope: Lead/Contact/Company CRUD + CSV import, one pipeline + Kanban, Proposal builder (template + dynamic variables, no marketplace yet), e-signature integration (one provider), Stripe test-mode checkout for deposit, webhook handling + `FinancialEvent` ledger.
 **Acceptance criteria:** steps 4–9 of the vertical slice work end-to-end in a staging environment with a real (test-mode) Stripe payment and a real e-sign completion.

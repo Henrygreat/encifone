@@ -47,7 +47,11 @@ jobs:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: postgres:16-alpine
+        # Matches the production standard (PostgreSQL 18 + pgvector) —
+        # see docs/DECISION_LOG.md. CI uses an ephemeral, unpersisted
+        # container, so PG18's versioned PGDATA path change doesn't matter
+        # here (no volume is mounted).
+        image: pgvector/pgvector:pg18
         env:
           POSTGRES_USER: clientos
           POSTGRES_PASSWORD: clientos_ci_password
@@ -75,6 +79,10 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm db:migrate:deploy
+      - name: Verify pgvector extension is enabled
+        run: |
+          PGPASSWORD=clientos_ci_password psql -h localhost -U clientos -d clientos \
+            -c "SELECT extname, extversion FROM pg_extension WHERE extname = 'vector';" | grep -q vector
       - run: pnpm test
 
   build:

@@ -7,7 +7,7 @@ import { branding } from "@/config/branding";
  * Phase 1 worker process: proves the independent-worker architecture
  * (docs/ARCHITECTURE.md §1/§7) actually runs, connected to the same Redis
  * instance as the app. No domain jobs exist yet — those arrive module by
- * module per docs/ROADMAP.md (e.g. webhook delivery, AI agent execution,
+ * module per docs/MASTER_ROADMAP.md (e.g. webhook delivery, AI agent execution,
  * scheduled renewal reminders).
  */
 // BullMQ requires maxRetriesPerRequest: null on the connection it owns.

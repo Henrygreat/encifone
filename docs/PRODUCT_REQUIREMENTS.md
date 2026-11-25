@@ -46,7 +46,7 @@ Templates are additive and non-exclusive — an org can start from "Digital Agen
 
 ## 6. Core modules — functional requirements summary
 
-Full feature lists are in the originating brief; this section states acceptance-relevant requirements per module. (Numbering matches `docs/ROADMAP.md` phase groupings.)
+Full feature lists are in the originating brief; this section states acceptance-relevant requirements per module. (Numbering matches `docs/MASTER_ROADMAP.md` phase groupings.)
 
 ### 6.1 Identity, Organisations & RBAC
 - A user can belong to multiple organisations with different roles per org; switching orgs changes all visible data atomically.
@@ -165,4 +165,4 @@ Full feature lists are in the originating brief; this section states acceptance-
 
 ## 9. Open questions / assumptions requiring future validation
 
-See `docs/ROADMAP.md` §"Assumptions & dependencies" for the consolidated list (pricing/payment-provider availability by region, e-signature vendor choice, WhatsApp Business API approval lead time, hosting budget ceiling).
+See `docs/MASTER_ROADMAP.md` §"Assumptions & dependencies" for the consolidated list (pricing/payment-provider availability by region, e-signature vendor choice, WhatsApp Business API approval lead time, hosting budget ceiling).

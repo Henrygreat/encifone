@@ -1,0 +1,72 @@
+# Local development override — adds a local PostgreSQL 18 + pgvector
+# container and republishes ports for host access. Use together with the
+# base file, never alone:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build
+#
+# (equivalently: `pnpm docker:local`)
+#
+# This file must never be pointed at by a Coolify/production deployment —
+# it exists purely to make local dev self-contained.
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg18
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-clientos}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-clientos_dev_password}
+      POSTGRES_DB: ${POSTGRES_DB:-clientos}
+    ports:
+      # Host port is remapped to avoid colliding with any other local
+      # Postgres — containers still talk to each other over the default
+      # 5432 on the internal network.
+      - "${POSTGRES_HOST_PORT:-5433}:5432"
+    volumes:
+      # PostgreSQL 18's official images changed the image's declared VOLUME
+      # and PGDATA to a version-specific subdirectory: PGDATA now lives at
+      # /var/lib/postgresql/18/docker, and the mount point moved up to
+      # /var/lib/postgresql (NOT .../data as in Postgres ≤17 images). Mounting
+      # the old .../data path here would silently land data in an anonymous,
+      # non-persistent volume instead. This volume is intentionally new/
+      # separate from the old `postgres_data` (PG16) volume — see
+      # docs/DATABASE_SCHEMA.md and docs/IMPLEMENTATION_STATUS.md for the
+      # PG16→PG18 migration record.
+      - postgres_data_pg18:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-clientos}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    ports:
+      - "${REDIS_HOST_PORT:-6380}:6379"
+
+  migrate:
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-clientos}:${POSTGRES_PASSWORD:-clientos_dev_password}@postgres:5432/${POSTGRES_DB:-clientos}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  app:
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-clientos}:${POSTGRES_PASSWORD:-clientos_dev_password}@postgres:5432/${POSTGRES_DB:-clientos}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  worker:
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-clientos}:${POSTGRES_PASSWORD:-clientos_dev_password}@postgres:5432/${POSTGRES_DB:-clientos}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres_data_pg18:
+  # The pre-migration PostgreSQL 16 volume. Intentionally still declared and
+  # NOT removed — see docs/IMPLEMENTATION_STATUS.md. Do not delete without
+  # explicit approval; nothing in this compose file writes to it anymore.
+  postgres_data:

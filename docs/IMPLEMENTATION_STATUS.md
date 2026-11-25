@@ -21,7 +21,7 @@ _Last updated: 2026-11-25_
 **Scaffolding & infra**
 - Next.js 16 (App Router, TypeScript strict) + Tailwind v4 + shadcn/ui (Radix UI base) + Lucide icons.
 - PostgreSQL via Prisma 7 (pg driver adapter — see `prisma.config.ts` / `src/lib/prisma.ts`), Redis via ioredis, BullMQ worker process.
-- Docker Compose stack (`postgres`, `redis`, `migrate`, `app`, `worker`) — **verified**: `docker compose up -d --build` brings up all four services from a clean build, migrations run automatically via the `migrate` one-shot service, `/api/health` reports both Postgres and Redis reachable.
+- Docker Compose: production-safe base (`docker-compose.yml`: `redis`, `migrate`, `app`, `worker` — no Postgres container) + local override (`docker-compose.local.yml`: adds `postgres` on `pgvector/pgvector:pg18`) — **verified**: `pnpm docker:local up -d --build` brings up all five services from a clean build, migrations run automatically via the `migrate` one-shot service, `/api/health` reports both Postgres and Redis reachable. See "Phase 1.1" below for the PostgreSQL 18 + pgvector standardisation.
 - Multi-stage `Dockerfile` producing a standalone Next.js runtime image and a separate worker image.
 - GitHub Actions CI (`.github/workflows/ci.yml`): dependency install, lint, typecheck, Prisma schema validation, dependency security audit, test (with Postgres/Redis service containers + migration), build. No job uses production credentials or a production database.
 - Environment validation at boot (`src/lib/env.ts`, zod-based, fails fast on missing/malformed config).
@@ -47,15 +47,53 @@ _Last updated: 2026-11-25_
 
 ### Phase 1 acceptance criteria — status
 
-All four criteria from `docs/ROADMAP.md` Phase 1 are met:
+All four criteria from `docs/MASTER_ROADMAP.md` Phase 1 are met:
 1. ✅ Register, create an org, invite a second user with a different role, switch between two orgs with visibly different data scoping.
 2. ✅ Cross-tenant API access is rejected (automated test + manual verification).
 3. ✅ `docker compose up` brings up app+DB+Redis+worker from a clean build; migrations run automatically.
 4. ✅ Lint, typecheck, test, and build all pass clean.
 
+## Phase 1.1 — Database standardisation: PostgreSQL 18 + pgvector (complete)
+
+Full decision record: `docs/DECISION_LOG.md`. This supersedes all prior PostgreSQL 16/17 configuration.
+
+### Compatibility assessment
+- **Prisma 7.10.1** has no known blocking incompatibility with PostgreSQL 18 for a schema-first workflow (confirmed empirically — see Validation below). One caveat: Prisma's schema-engine `prisma db pull` (introspection) has a reported panic against some PG18 `NOT NULL` constraint metadata, fixed in Prisma ORM 8. This project never runs `db pull` (schema-first, not introspection-first), so it isn't hit in normal use — noted as a constraint on future tooling choices, not a blocker.
+- **pgvector 0.8.7** ships pre-built in the `pgvector/pgvector:pg18` image — confirmed available via `pg_available_extensions` and successfully enabled via `CREATE EXTENSION IF NOT EXISTS vector;` (migration `20261125124136_enable_pgvector`).
+- **No dependency version bumps were required** in `package.json`/`prisma.config.ts` — only the Docker image tag and the compose volume mount path changed.
+- Prisma's own current guidance (as of this pass) is to manage Postgres extensions via a plain SQL migration rather than the now-deprecated `postgresqlExtensions` preview feature — that's the approach used here.
+
+### Safe database migration (local)
+1. **Backup:** `pg_dump -Fc` and a plain-SQL dump of the existing PG16 database, taken while it was still running on its original (`postgres:16-alpine`) container/volume. Stored at `backups/clientos_pg16_backup_20261125.{dump,sql}` (gitignored — never committed). Integrity verified via `pg_restore --list` (44 TOC entries, all 8 expected tables present).
+2. **New volume:** `docker-compose.local.yml` defines a brand-new `postgres_data_pg18` volume, mounted at `/var/lib/postgresql` (PG18's new volume layout — see `docs/DEPLOYMENT.md` §3) — **never** the old PG16 volume or its old `.../data` mount path.
+3. **Restore:** the PG16 dump was restored into the fresh, empty PG18 container via `pg_restore`. Row counts (`User`, `Organisation`, `Membership`, `AuditLog`) and the `_prisma_migrations` history table were compared before and after — identical in both cases (the project currently has 0 real users/orgs/memberships and 24 `AuditLog` rows from earlier testing; the procedure is the same regardless of data volume).
+4. **New migration applied on top:** `20261125124136_enable_pgvector` was created and applied *after* the restore, so it appends cleanly to the existing (preserved) migration history rather than conflicting with it.
+5. **Old database retained:** the original container was stopped (not removed); its volume (`clientos-ai_postgres_data`) and both backup files still exist on disk, untouched. **Not deleted — awaiting explicit approval**, per instruction.
+
+### Docker / Coolify configuration
+- `docker-compose.yml` (base) now defines **no Postgres service at all** — production uses a separately-provisioned Coolify-managed PostgreSQL 18 + pgvector instance via `DATABASE_URL`, so there's no duplicate/competing production Postgres container. Redis in the base file publishes no host port (reachable only from other containers on the compose network).
+- `docker-compose.local.yml` (new file) adds the local `postgres` (`pgvector/pgvector:pg18`) service and republishes the existing local ports (`5433` Postgres, `6380` Redis) for host-side tooling (psql, Prisma Studio, redis-cli) — unchanged from before.
+- `app`/`worker`/`migrate` read `DATABASE_URL`/`REDIS_URL` from the environment with no hardcoded database host in the base file; the local override supplies the local connection string. Verified via `docker compose -f docker-compose.yml config` (no `postgres` service, no Redis port published) and the merged local config (`-f docker-compose.yml -f docker-compose.local.yml config`) resolving correctly to the local Postgres/Redis.
+- `pnpm docker:local` script added as shorthand for `docker compose -f docker-compose.yml -f docker-compose.local.yml`.
+- `.github/workflows/ci.yml`'s ephemeral test-database service container also moved to `pgvector/pgvector:pg18`, with an explicit step asserting the extension is enabled — CI never touches a persistent volume or production database either way.
+
+### Validation — all passed, against the restored PostgreSQL 18 + pgvector database
+- ✅ Database connectivity (`/api/health` → `{"database":"ok","redis":"ok"}`)
+- ✅ `prisma validate` (schema valid)
+- ✅ Database migrations (`20261125105100_init` + new `20261125124136_enable_pgvector`, both applied; history preserved from the PG16 restore)
+- ✅ pgvector extension availability (`pg_extension` shows `vector 0.8.7` enabled)
+- ✅ Authentication (register + credentials sign-in against the new database)
+- ✅ Organisation management (create org, create a second org, org switcher)
+- ✅ Tenant isolation (cross-tenant org-switch attempt rejected with 403)
+- ✅ Background worker connectivity (`[worker] EncifOne worker ready, listening on queue 'system'`, connected to the same Redis/Postgres)
+- ✅ Automated tests (9/9 passing — unit + real-database integration)
+- ✅ Linting (clean)
+- ✅ Type checking (clean)
+- ✅ Production Docker build (`pnpm docker:local up -d --build` — app/worker/migrate images build and run against PG18) and standalone `pnpm build` (clean)
+
 ### Not started (everything outside Phase 1 scope)
 
-No CRM, sales, proposals, projects, finance, helpdesk, AI, or any other domain module exists yet — see `docs/ROADMAP.md` Phase 2 onward. The dashboard, sidebar, and command palette intentionally show these as "Planned," not implemented.
+No CRM, sales, proposals, projects, finance, helpdesk, AI, or any other domain module exists yet — see `docs/MASTER_ROADMAP.md` Phase 2 onward. The dashboard, sidebar, and command palette intentionally show these as "Planned," not implemented.
 
 ## Known limitations
 
@@ -63,10 +101,11 @@ No CRM, sales, proposals, projects, finance, helpdesk, AI, or any other domain m
 - **MFA is a schema stub only** — no enrolment or challenge UI.
 - **Prisma 7 config** moved the datasource URL out of `schema.prisma` into `prisma.config.ts` / the `PrismaPg` adapter (a breaking change from earlier Prisma majors) — if upgrading Prisma further, re-check `https://pris.ly/d/prisma7-client-config` for further changes.
 - **`cacheComponents` (Next 16's PPR successor) is disabled** in `next.config.ts` — this app is session/tenant-scoped on nearly every route, which doesn't fit a prerendering-first model. Revisit only if a genuinely static, cacheable surface (e.g. the future marketing site) needs it.
-- Local dev Postgres/Redis ports are remapped (5433/6380) in `docker-compose.yml` to avoid colliding with other local stacks — adjust `POSTGRES_HOST_PORT`/`REDIS_HOST_PORT` if that still collides for you.
+- Local dev Postgres/Redis ports are remapped (5433/6380) in `docker-compose.local.yml` to avoid colliding with other local stacks — adjust `POSTGRES_HOST_PORT`/`REDIS_HOST_PORT` if that still collides for you.
+- The old PostgreSQL 16 volume (`clientos-ai_postgres_data`) and its backup files (`backups/`) are still on disk, retained pending explicit approval to delete — see "Phase 1.1" above.
 - Tenant-isolation automated tests exercise the service layer (the actual enforcement point behind every route) rather than full HTTP requests against a running server; the HTTP-level behaviour was additionally verified manually via curl against the running app, matching `docs/TESTING.md`'s intent even though the automated suite doesn't yet drive it through Playwright/supertest-style HTTP calls.
 - No seed script yet — every environment starts with an empty database.
 
 ## Recommended next step
 
-Begin **Phase 2 — CRM + Sales minimal + Proposal/Contract + Payment (deposit)** per `docs/ROADMAP.md` §3: Lead/Contact/Company CRUD, one sales pipeline, a proposal builder with e-signature, and a Stripe test-mode deposit checkout, building on the identity/tenancy/RBAC foundation shipped in Phase 1.
+Phase 1.1 is complete and validated. **Phase 2 is on hold pending explicit approval** (per instruction). When approved, Phase 2 — CRM + Sales minimal + Proposal/Contract + Payment (deposit) — begins per `docs/MASTER_ROADMAP.md` §3: Lead/Contact/Company CRUD, one sales pipeline, a proposal builder with e-signature, and a Stripe test-mode deposit checkout, building on the identity/tenancy/RBAC foundation (Phase 1) and the PostgreSQL 18 + pgvector database standard (Phase 1.1).

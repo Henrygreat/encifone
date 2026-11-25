@@ -88,7 +88,7 @@ export async function registerOwner(input: RegisterInput) {
 
 /**
  * Creates a pending (status = INVITED) membership. No email is sent yet —
- * Phase 1 has no email provider wired up (see docs/ROADMAP.md) — so the
+ * Phase 1 has no email provider wired up (see docs/MASTER_ROADMAP.md) — so the
  * invite link containing `inviteToken` must currently be shared out of band.
  */
 export async function inviteMember(acting: ActiveMembership, input: InviteMemberInput) {
@@ -178,7 +178,7 @@ export async function listMembers(acting: ActiveMembership) {
 /**
  * Lets an already-registered user spin up an additional organisation they
  * own, independent of the one created at registration. This is how a single
- * person ends up with multiple orgs to switch between (see docs/ROADMAP.md
+ * person ends up with multiple orgs to switch between (see docs/MASTER_ROADMAP.md
  * Phase 1 acceptance criteria) without needing a separate invite flow.
  */
 export async function createOrganisationForExistingUser(userId: string, name: string) {

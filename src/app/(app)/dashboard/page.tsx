@@ -76,7 +76,7 @@ export default async function DashboardPage() {
             </CardHeader>
             <CardContent className="text-sm text-muted-foreground">
               This widget will show real, drill-down-capable figures once that phase ships — see
-              docs/ROADMAP.md.
+              docs/MASTER_ROADMAP.md.
             </CardContent>
           </Card>
         ))}

@@ -16,7 +16,8 @@
     "db:migrate:dev": "prisma migrate dev",
     "db:migrate:deploy": "prisma migrate deploy",
     "db:studio": "prisma studio",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "docker:local": "docker compose -f docker-compose.yml -f docker-compose.local.yml"
   },
   "dependencies": {
     "@hookform/resolvers": "7.0.9",

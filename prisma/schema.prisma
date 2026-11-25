@@ -1,7 +1,7 @@
-// ClientOS AI — Phase 1 schema: identity & platform domain only.
+// EncifOne — Phase 1 schema: identity & platform domain only.
 // See docs/DATABASE_SCHEMA.md for the full planned domain model.
 // Additional domain modules (crm, sales, projects, finance, ...) are added
-// in their own phases per docs/ROADMAP.md, not scaffolded ahead of need.
+// in their own phases per docs/MASTER_ROADMAP.md, not scaffolded ahead of need.
 
 generator client {
   provider = "prisma-client-js"

@@ -1,6 +1,8 @@
 # Database Schema / Domain Model — EncifOne
 
-This is the Phase 0 entity inventory and relationship map — not a requirement to build every table in Phase 1. See `docs/ROADMAP.md` for which entities ship in the MVP vertical slice.
+This is the Phase 0 entity inventory and relationship map — not a requirement to build every table in Phase 1. See `docs/MASTER_ROADMAP.md` for which entities ship in the MVP vertical slice.
+
+**Database engine: PostgreSQL 18 with the `pgvector` extension** (standardised in Phase 1.1 — see `docs/DECISION_LOG.md`). The `vector` extension is enabled via a Prisma migration (`prisma/migrations/20261125124136_enable_pgvector`) so it's ready for the AI/knowledge modules below, but **no vector column, index, or AI table exists yet** — `KnowledgeArticle`/`KnowledgeChunk` (§11 below) remain planned, not implemented, until the Knowledge Base/RAG phase.
 
 ## 1. Tenancy & conventions
 

@@ -13,7 +13,7 @@ export interface NavGroup {
  * docs/PRODUCT_REQUIREMENTS.md §6. Items without an `href` are genuinely not
  * built yet — they render as disabled rows, never as dead links or buttons
  * (see CLAUDE.md "no fake functionality"). As each module ships per
- * docs/ROADMAP.md, give its item a real `href` here.
+ * docs/MASTER_ROADMAP.md, give its item a real `href` here.
  */
 export const NAV_GROUPS: NavGroup[] = [
   {
