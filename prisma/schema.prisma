@@ -1,0 +1,151 @@
+// ClientOS AI — Phase 1 schema: identity & platform domain only.
+// See docs/DATABASE_SCHEMA.md for the full planned domain model.
+// Additional domain modules (crm, sales, projects, finance, ...) are added
+// in their own phases per docs/ROADMAP.md, not scaffolded ahead of need.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// The connection URL lives in prisma.config.ts (Prisma 7+ no longer reads it
+// from the schema file) and in the PrismaPg adapter passed to PrismaClient
+// at runtime (src/lib/prisma.ts) — both read DATABASE_URL from the environment.
+datasource db {
+  provider = "postgresql"
+}
+
+// --- Auth.js (next-auth) required models ---
+// Field/model names follow the next-auth Prisma adapter contract exactly.
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// --- Identity ---
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  // Null for users who have only ever authenticated via OAuth.
+  passwordHash  String?
+  // Stub only — no TOTP enrolment/challenge flow is implemented yet (Phase 1).
+  mfaEnabled    Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts    Account[]
+  sessions    Session[]
+  memberships Membership[]
+}
+
+model Organisation {
+  id              String   @id @default(cuid())
+  name            String
+  slug            String   @unique
+  // Logo/colour-token overrides — see docs/DESIGN_SYSTEM.md §6 (white-label & theming).
+  branding        Json?
+  defaultCurrency String   @default("GBP")
+  timezone        String   @default("Europe/London")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  memberships Membership[]
+  auditLogs   AuditLog[]
+}
+
+enum MembershipRole {
+  PLATFORM_SUPER_ADMIN
+  ORGANISATION_OWNER
+  ORGANISATION_ADMIN
+  OPERATIONS_MANAGER
+  SALES_MANAGER
+  SALES_REPRESENTATIVE
+  ACCOUNT_MANAGER
+  FINANCE_MANAGER
+  PROJECT_MANAGER
+  TEAM_MEMBER
+  CONTRACTOR
+  CLIENT_ADMINISTRATOR
+  CLIENT_USER
+  READ_ONLY_AUDITOR
+}
+
+enum MembershipStatus {
+  ACTIVE
+  INVITED
+  SUSPENDED
+}
+
+model Membership {
+  id             String           @id @default(cuid())
+  userId         String
+  organisationId String
+  role           MembershipRole
+  status         MembershipStatus @default(ACTIVE)
+  // The org a user lands in by default on login; exactly one per user should be true
+  // (enforced in the service layer, not a DB constraint, since it spans rows).
+  isDefault      Boolean          @default(false)
+  // Set when status = INVITED; cleared once the invite is accepted.
+  inviteToken    String?          @unique
+  invitedAt      DateTime?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, organisationId])
+  @@index([organisationId, status])
+}
+
+// Immutable append-only audit trail. Never updated or deleted by application code.
+model AuditLog {
+  id             String   @id @default(cuid())
+  // Null for platform-level actions with no single owning organisation.
+  organisationId String?
+  actorUserId    String?
+  action         String
+  resourceType   String
+  resourceId     String?
+  metadata       Json?
+  createdAt      DateTime @default(now())
+
+  organisation Organisation? @relation(fields: [organisationId], references: [id], onDelete: SetNull)
+
+  @@index([organisationId, createdAt])
+}

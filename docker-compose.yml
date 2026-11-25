@@ -1,0 +1,90 @@
+name: clientos-ai
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-clientos}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-clientos_dev_password}
+      POSTGRES_DB: ${POSTGRES_DB:-clientos}
+    ports:
+      # Host port is remapped to avoid colliding with any other local Postgres
+      # (e.g. another project's stack already using 5432) — containers still
+      # talk to each other over the default 5432 on the internal network.
+      - "${POSTGRES_HOST_PORT:-5433}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-clientos}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "${REDIS_HOST_PORT:-6380}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  migrate:
+    build:
+      context: .
+      target: deps
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-clientos}:${POSTGRES_PASSWORD:-clientos_dev_password}@postgres:5432/${POSTGRES_DB:-clientos}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    # Direct binary call — `pnpm exec` would otherwise make outbound
+    # registry calls on every run just to verify the lockfile.
+    command: ["node_modules/.bin/prisma", "migrate", "deploy"]
+    restart: "no"
+
+  app:
+    build:
+      context: .
+      target: app
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-clientos}:${POSTGRES_PASSWORD:-clientos_dev_password}@postgres:5432/${POSTGRES_DB:-clientos}
+      REDIS_URL: redis://redis:6379
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  worker:
+    build:
+      context: .
+      target: worker
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-clientos}:${POSTGRES_PASSWORD:-clientos_dev_password}@postgres:5432/${POSTGRES_DB:-clientos}
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+volumes:
+  postgres_data:
+  redis_data:
