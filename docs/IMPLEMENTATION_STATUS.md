@@ -95,6 +95,15 @@ Full decision record: `docs/DECISION_LOG.md`. This supersedes all prior PostgreS
 
 No CRM, sales, proposals, projects, finance, helpdesk, AI, or any other domain module exists yet — see `docs/MASTER_ROADMAP.md` Phase 2 onward. The dashboard, sidebar, and command palette intentionally show these as "Planned," not implemented.
 
+## Pre-Phase-2 audit & production deployment hardening (complete)
+
+Full record: `docs/DECISION_LOG.md` (2026-11-26 entry). Performed before any Phase 2 feature code, per the mandatory pre-development audit.
+
+- **Git/branch reconciliation:** production branch is now `master` (not `main` — see Decision Log); `develop` fast-forwarded to include `master`'s one-ahead commit before starting.
+- **Production deployment status:** a first Coolify deployment has been attempted and is accessible. It surfaced real issues, all now fixed and guarded against in `docs/DEPLOYMENT.md` §4: Coolify `env_file` fragility (removed — compose now uses only explicit `${VAR}` interpolation), a latent bug where the background worker would crash without `AUTH_SECRET`/`APP_URL` set (it imports the same env-validation module as the app), the Next.js standalone server binding to its container's own IP instead of `0.0.0.0` (fixed via `ENV HOSTNAME=0.0.0.0`), and explicit guidance on Coolify's database-network-isolation and reverse-proxy-domain-assignment behaviour.
+- **Verified again post-hardening:** full local stack rebuild, `app` container `HEALTHCHECK` passes (confirmed bind address `0.0.0.0:3000` via `/proc/net/tcp`), worker starts cleanly, `/api/health` ok, lint/typecheck/tests (9/9) all pass.
+- **Phase 1 feature completeness reconfirmed** before starting Phase 2: all four Phase 1 acceptance criteria above still hold; nothing was found to have regressed.
+
 ## Known limitations
 
 - **No email delivery.** Invite links must be shared manually. This blocks any real multi-user onboarding until an email provider (Resend/Postmark) is wired up — planned alongside Phase 2's proposal/contract flows.
@@ -108,4 +117,4 @@ No CRM, sales, proposals, projects, finance, helpdesk, AI, or any other domain m
 
 ## Recommended next step
 
-Phase 1.1 is complete and validated. **Phase 2 is on hold pending explicit approval** (per instruction). When approved, Phase 2 — CRM + Sales minimal + Proposal/Contract + Payment (deposit) — begins per `docs/MASTER_ROADMAP.md` §3: Lead/Contact/Company CRUD, one sales pipeline, a proposal builder with e-signature, and a Stripe test-mode deposit checkout, building on the identity/tenancy/RBAC foundation (Phase 1) and the PostgreSQL 18 + pgvector database standard (Phase 1.1).
+Phase 1.1 and the pre-Phase-2 audit/hardening above are complete and validated. **Phase 2 is now underway**, broken into subphases per feature branch (`feature/phase-2.1-crm`, `feature/phase-2.2-sales-pipeline`, ...), each merged to `develop` only once its own acceptance criteria pass — see `docs/MASTER_ROADMAP.md` for the Phase 2 scope reconciliation and `docs/COMPETITIVE_ANALYSIS.md` for the Phase 2 competitive research.
