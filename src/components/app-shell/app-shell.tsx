@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Sidebar } from "./sidebar";
 import { TopBar } from "./top-bar";
 import { CommandPalette } from "./command-palette";
+import { Breadcrumbs } from "./breadcrumbs";
 
 export function AppShell({
   activeOrganisationId,
@@ -26,7 +27,10 @@ export function AppShell({
       />
       <div className="flex flex-1 overflow-hidden">
         <Sidebar collapsed={collapsed} />
-        <main className="flex-1 overflow-y-auto bg-background">{children}</main>
+        <main className="flex flex-1 flex-col overflow-y-auto bg-background">
+          <Breadcrumbs />
+          <div className="flex-1">{children}</div>
+        </main>
       </div>
       <CommandPalette />
     </div>

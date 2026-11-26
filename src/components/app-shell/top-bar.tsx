@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import { OrgSwitcher } from "./org-switcher";
 import { UserMenu } from "./user-menu";
 import { ThemeToggle } from "./theme-toggle";
+import { MobileNav } from "./mobile-nav";
+import { NotificationCentre } from "./notification-centre";
 
 export function TopBar({
   collapsed,
@@ -19,6 +21,7 @@ export function TopBar({
 }) {
   return (
     <header className="flex h-14 shrink-0 items-center gap-3 border-b border-border bg-background px-4">
+      <MobileNav />
       <Button
         variant="ghost"
         size="icon"
@@ -44,6 +47,7 @@ export function TopBar({
       </Button>
 
       <div className="ml-auto flex items-center gap-2">
+        <NotificationCentre />
         <ThemeToggle />
         <UserMenu name={user.name} email={user.email} image={user.image} />
       </div>

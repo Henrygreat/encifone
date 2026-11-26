@@ -13,18 +13,18 @@ const HeroNetworkScene = dynamic(() => import("./scenes/hero-network-scene"), { 
  */
 function StaticHeroFallback() {
   const nodes = [
-    { x: 50, y: 12, color: "#6366F1" },
-    { x: 85, y: 35, color: "#F59E0B" },
+    { x: 50, y: 12, color: "#22D3EE" },
+    { x: 85, y: 35, color: "#FBBF24" },
     { x: 78, y: 75, color: "#10B981" },
-    { x: 22, y: 75, color: "#2563EB" },
+    { x: 22, y: 75, color: "#3B82F6" },
     { x: 15, y: 35, color: "#8B5CF6" },
   ];
   return (
     <svg viewBox="0 0 100 100" className="size-full opacity-70" aria-hidden="true">
       <defs>
         <radialGradient id="hero-fallback-core" cx="50%" cy="50%" r="50%">
-          <stop offset="0%" stopColor="#6366F1" stopOpacity="0.9" />
-          <stop offset="100%" stopColor="#6366F1" stopOpacity="0" />
+          <stop offset="0%" stopColor="#22D3EE" stopOpacity="0.9" />
+          <stop offset="100%" stopColor="#22D3EE" stopOpacity="0" />
         </radialGradient>
       </defs>
       <circle cx="50" cy="50" r="30" fill="url(#hero-fallback-core)" />
@@ -40,7 +40,7 @@ function StaticHeroFallback() {
           strokeWidth="0.4"
         />
       ))}
-      <circle cx="50" cy="50" r="5" fill="#6366F1" />
+      <circle cx="50" cy="50" r="5" fill="#22D3EE" />
       {nodes.map((node, i) => (
         <circle key={`node-${i}`} cx={node.x} cy={node.y} r="3" fill={node.color} />
       ))}

@@ -13,7 +13,7 @@ function StaticOrbFallback() {
       aria-hidden="true"
       className="size-full rounded-full opacity-80"
       style={{
-        background: "radial-gradient(circle at 35% 35%, #c4b5fd 0%, #8B5CF6 55%, transparent 100%)",
+        background: "radial-gradient(circle at 35% 35%, #6ee7c4 0%, #10B981 55%, transparent 100%)",
       }}
     />
   );

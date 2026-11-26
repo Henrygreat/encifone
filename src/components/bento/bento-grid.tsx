@@ -4,23 +4,17 @@ import { Card } from "@/components/ui/card";
 import type { ModuleKey } from "@/components/app-shell/nav-config";
 
 /**
- * Responsive Bento dashboard grid — see docs/DESIGN_SYSTEM.md §4. Cards
- * declare their own size via `colSpan`/`rowSpan` (1-4 columns on desktop,
- * collapsing to a single column on mobile); the grid itself just lays them
- * out. Widget *content* is intentionally not part of this file — this is
- * the structural layer the dashboard widget registry (Milestone D) builds
- * on top of.
+ * Responsive, asymmetric 12-column Bento dashboard grid — see
+ * docs/DESIGN_SYSTEM.md §4. Cards declare their own footprint via
+ * `colSpan` (3/4/6/8/12 of the 12-col grid) and `rowSpan` (1-3); the grid
+ * itself just lays them out. Collapses to a 6-col grid at `sm` and a
+ * single column below that — every `colSpan` value maps to a sensible
+ * narrower span at each breakpoint rather than just clamping to 100%.
+ * Widget *content* is intentionally not part of this file.
  */
 export function BentoGrid({ className, children }: { className?: string; children: React.ReactNode }) {
   return (
-    <div
-      className={cn(
-        "grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4",
-        className
-      )}
-    >
-      {children}
-    </div>
+    <div className={cn("grid grid-cols-1 gap-4 sm:grid-cols-6 lg:grid-cols-12", className)}>{children}</div>
   );
 }
 
@@ -33,23 +27,28 @@ const MODULE_VAR: Record<ModuleKey, string> = {
   admin: "var(--module-admin)",
 };
 
-const COL_SPAN: Record<1 | 2 | 3 | 4, string> = {
-  1: "sm:col-span-1",
-  2: "sm:col-span-2",
-  3: "sm:col-span-2 lg:col-span-3",
-  4: "sm:col-span-2 lg:col-span-4",
+const COL_SPAN: Record<3 | 4 | 6 | 8 | 12, string> = {
+  3: "sm:col-span-3 lg:col-span-3",
+  4: "sm:col-span-3 lg:col-span-4",
+  6: "sm:col-span-6 lg:col-span-6",
+  8: "sm:col-span-6 lg:col-span-8",
+  12: "sm:col-span-6 lg:col-span-12",
 };
 
-const ROW_SPAN: Record<1 | 2, string> = {
+const ROW_SPAN: Record<1 | 2 | 3, string> = {
   1: "row-span-1",
   2: "row-span-2",
+  3: "row-span-3",
 };
 
 export interface BentoCardProps extends React.ComponentProps<"div"> {
-  colSpan?: 1 | 2 | 3 | 4;
-  rowSpan?: 1 | 2;
+  colSpan?: 3 | 4 | 6 | 8 | 12;
+  rowSpan?: 1 | 2 | 3;
   /** Tints the card's top accent bar and any icon passed via `accentSlot`. */
   accentModule?: ModuleKey;
+  /** Subtle glassmorphism + gradient border — used sparingly (the hero
+   * welcome card, the AI insights card), never as the default card style. */
+  variant?: "default" | "glass";
 }
 
 /**
@@ -59,9 +58,10 @@ export interface BentoCardProps extends React.ComponentProps<"div"> {
  */
 export function BentoCard({
   className,
-  colSpan = 1,
+  colSpan = 4,
   rowSpan = 1,
   accentModule,
+  variant = "default",
   children,
   ...props
 }: BentoCardProps) {
@@ -72,6 +72,7 @@ export function BentoCard({
         "relative flex flex-col gap-3 p-5",
         COL_SPAN[colSpan],
         ROW_SPAN[rowSpan],
+        variant === "glass" && "glass-panel gradient-border shadow-elevated",
         className
       )}
       {...props}

@@ -1,21 +1,26 @@
 import Link from "next/link";
 import { requireActiveMembership } from "@/core/tenancy";
+import { getServerAuthSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { formatMoneyMinor } from "@/lib/money";
 import { getDashboardSummary } from "@/modules/dashboard/service";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { BentoCard, BentoEmptyState, BentoGrid } from "@/components/bento/bento-grid";
 import { LeadSourceChart } from "@/components/dashboard/lead-source-chart";
+import { PipelineStageChart } from "@/components/dashboard/pipeline-stage-chart";
 import { AiOrb } from "@/components/three/ai-orb";
 import { formatEnumLabel } from "@/lib/utils";
+import { UserPlus, Target, KanbanSquare } from "lucide-react";
 
 const PLANNED_WIDGETS: { title: string; availableFrom: string }[] = [
   { title: "Monthly recurring revenue", availableFrom: "Phase 4" },
   { title: "Client health scores", availableFrom: "Phase 10" },
   { title: "AI executive briefing", availableFrom: "Phase 9" },
 ];
+
+type ModuleKey = "overview" | "crm" | "sales" | "work" | "intelligence" | "admin";
 
 function Kpi({
   label,
@@ -25,11 +30,11 @@ function Kpi({
 }: {
   label: string;
   value: string | number;
-  accentModule?: "overview" | "crm" | "sales" | "work" | "intelligence" | "admin";
+  accentModule?: ModuleKey;
   href?: string;
 }) {
   const content = (
-    <BentoCard accentModule={accentModule}>
+    <BentoCard colSpan={3} accentModule={accentModule}>
       <span className="text-sm text-muted-foreground">{label}</span>
       <span className="text-3xl font-semibold tracking-tight text-foreground">{value}</span>
     </BentoCard>
@@ -37,157 +42,192 @@ function Kpi({
   return href ? <Link href={href}>{content}</Link> : content;
 }
 
+function greeting(hour: number) {
+  if (hour < 5) return "Working late";
+  if (hour < 12) return "Good morning";
+  if (hour < 18) return "Good afternoon";
+  return "Good evening";
+}
+
 export default async function DashboardPage() {
   const acting = await requireActiveMembership();
 
-  const [organisation, memberCount, summary] = await Promise.all([
+  const [session, organisation, memberCount, summary] = await Promise.all([
+    getServerAuthSession(),
     prisma.organisation.findUniqueOrThrow({ where: { id: acting.organisationId } }),
     prisma.membership.count({ where: { organisationId: acting.organisationId, status: "ACTIVE" } }),
     getDashboardSummary(acting),
   ]);
 
+  const firstName = session?.user?.name?.split(" ")[0] ?? "there";
+  const priorityCount = summary.overdueTasksCount + summary.upcomingFollowUps.length;
+
   return (
     <div className="flex flex-col gap-6 p-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-foreground">{organisation.name}</h1>
-        <p className="text-sm text-muted-foreground">
-          You&apos;re signed in as <span className="font-medium">{acting.role.replaceAll("_", " ")}</span>.
-        </p>
-      </div>
-
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <Card>
-          <CardHeader>
-            <CardDescription>Active members</CardDescription>
-            <CardTitle className="text-3xl">{memberCount}</CardTitle>
-          </CardHeader>
-          <CardContent className="text-sm text-muted-foreground">
-            Manage who has access under Organisation Settings.
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardDescription>Default currency</CardDescription>
-            <CardTitle className="text-3xl">{organisation.defaultCurrency}</CardTitle>
-          </CardHeader>
-          <CardContent className="text-sm text-muted-foreground">
-            Used across invoicing and reporting once Finance ships.
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardDescription>Organisation since</CardDescription>
-            <CardTitle className="text-3xl">
+      <BentoGrid>
+        {/* Personalised welcome hero */}
+        <BentoCard colSpan={8} rowSpan={2} variant="glass" className="justify-between">
+          <div className="flex flex-col gap-1">
+            <p className="text-sm font-medium" style={{ color: "var(--module-sales)" }}>
+              {greeting(new Date().getHours())}, {firstName}
+            </p>
+            <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
+              {organisation.name}
+            </h1>
+            <p className="text-sm text-muted-foreground">
+              {memberCount} active member{memberCount === 1 ? "" : "s"} · {organisation.defaultCurrency} ·
+              building since{" "}
               {organisation.createdAt.toLocaleDateString(undefined, { year: "numeric", month: "short" })}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="text-sm text-muted-foreground">{organisation.slug}</CardContent>
-        </Card>
-      </div>
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button asChild size="sm" style={{ background: "var(--module-crm)", color: "#060B14" }}>
+              <Link href="/contacts">
+                <UserPlus className="size-4" /> New contact
+              </Link>
+            </Button>
+            <Button asChild size="sm" variant="outline">
+              <Link href="/leads">
+                <Target className="size-4" /> New lead
+              </Link>
+            </Button>
+            <Button asChild size="sm" variant="outline">
+              <Link href="/deals">
+                <KanbanSquare className="size-4" /> New deal
+              </Link>
+            </Button>
+          </div>
+        </BentoCard>
 
-      <div>
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-          CRM &amp; sales
-        </h2>
-        <BentoGrid>
-          <Kpi label="Contacts" value={summary.totalContacts} accentModule="crm" href="/contacts" />
-          <Kpi label="Companies" value={summary.totalCompanies} accentModule="crm" href="/companies" />
-          <Kpi label="Active leads" value={summary.activeLeads} accentModule="crm" href="/leads" />
-          <Kpi label="Open deals" value={summary.openOpportunities} accentModule="sales" href="/deals" />
+        {/* Compact AI intelligence visualisation — the one WebGL canvas on
+            this page, per docs/DESIGN_SYSTEM.md §9. */}
+        <BentoCard colSpan={4} rowSpan={2} accentModule="intelligence" className="items-center justify-center text-center">
+          <AiOrb className="size-24" />
+          <p className="text-sm font-medium text-foreground">AI Intelligence Core</p>
+          <p className="text-xs text-muted-foreground">Not yet configured — see below</p>
+        </BentoCard>
 
-          <Kpi label="Pipeline value" value={formatMoneyMinor(summary.pipelineValueMinor, "GBP")} accentModule="sales" />
-          <Kpi
-            label="Weighted forecast"
-            value={formatMoneyMinor(summary.weightedForecastMinor, "GBP")}
-            accentModule="sales"
+        {/* Real business KPIs */}
+        <Kpi label="Pipeline value" value={formatMoneyMinor(summary.pipelineValueMinor, "GBP")} accentModule="sales" />
+        <Kpi
+          label="Weighted forecast"
+          value={formatMoneyMinor(summary.weightedForecastMinor, "GBP")}
+          accentModule="sales"
+        />
+        <Kpi
+          label="Lead conversion"
+          value={summary.conversionRate === null ? "—" : `${Math.round(summary.conversionRate * 100)}%`}
+          accentModule="crm"
+        />
+        <Kpi label="Contacts" value={summary.totalContacts} accentModule="crm" href="/contacts" />
+
+        <Kpi label="Companies" value={summary.totalCompanies} accentModule="crm" href="/companies" />
+        <Kpi label="Active leads" value={summary.activeLeads} accentModule="crm" href="/leads" />
+        <Kpi label="Open deals" value={summary.openOpportunities} accentModule="sales" href="/deals" />
+        <Kpi label="Won deals" value={summary.wonOpportunities} accentModule="sales" />
+
+        {/* Sales performance */}
+        <BentoCard colSpan={6} rowSpan={2} accentModule="sales">
+          <span className="text-sm font-medium text-foreground">Sales performance by stage</span>
+          {summary.pipelineByStage.length === 0 ? (
+            <BentoEmptyState
+              title="No open deals yet"
+              description="Add a deal to your pipeline to see how value is distributed across stages."
+            />
+          ) : (
+            <PipelineStageChart data={summary.pipelineByStage} />
+          )}
+        </BentoCard>
+
+        {/* Lead source analytics */}
+        <BentoCard colSpan={6} rowSpan={2} accentModule="crm">
+          <span className="text-sm font-medium text-foreground">Lead source performance</span>
+          {summary.leadsBySource.length === 0 ? (
+            <BentoEmptyState
+              title="No lead sources recorded yet"
+              description="Capture a lead with a source (e.g. Website form, Referral) to see this chart fill in."
+            />
+          ) : (
+            <LeadSourceChart data={summary.leadsBySource} />
+          )}
+        </BentoCard>
+
+        {/* Recent activity */}
+        <BentoCard colSpan={4} rowSpan={2} accentModule="overview">
+          <span className="text-sm font-medium text-foreground">Recent activity</span>
+          {summary.recentActivities.length === 0 ? (
+            <BentoEmptyState
+              title="Nothing logged yet"
+              description="Calls, meetings, notes, and tasks you log against contacts, companies, leads, or deals will show up here."
+            />
+          ) : (
+            <ul className="flex flex-col gap-2 overflow-y-auto">
+              {summary.recentActivities.map((activity) => (
+                <li key={activity.id} className="flex items-center justify-between gap-2 text-sm">
+                  <span className="truncate text-foreground">{activity.subject}</span>
+                  <span className="shrink-0 text-xs text-muted-foreground">{formatEnumLabel(activity.type)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </BentoCard>
+
+        {/* Priority actions — overdue tasks + upcoming follow-ups combined */}
+        <BentoCard colSpan={4} rowSpan={2} accentModule="work">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium text-foreground">Priority actions</span>
+            {summary.overdueTasksCount > 0 && (
+              <Badge variant="destructive">{summary.overdueTasksCount} overdue</Badge>
+            )}
+          </div>
+          {priorityCount === 0 ? (
+            <BentoEmptyState title="Nothing urgent" description="You're on top of your open tasks." />
+          ) : (
+            <ul className="flex flex-col gap-1.5">
+              {summary.upcomingFollowUps.map((task) => (
+                <li key={task.id} className="flex items-center justify-between text-sm">
+                  <span className="truncate text-foreground">{task.subject}</span>
+                  <span className="shrink-0 text-xs text-muted-foreground">{task.dueAt?.toLocaleDateString()}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </BentoCard>
+
+        {/* Quick-create actions */}
+        <BentoCard colSpan={4} rowSpan={2} accentModule="admin">
+          <span className="text-sm font-medium text-foreground">Quick actions</span>
+          <div className="flex flex-1 flex-col gap-2">
+            <Button asChild variant="outline" className="justify-start">
+              <Link href="/contacts">
+                <UserPlus className="size-4" /> Add a contact
+              </Link>
+            </Button>
+            <Button asChild variant="outline" className="justify-start">
+              <Link href="/leads">
+                <Target className="size-4" /> Capture a lead
+              </Link>
+            </Button>
+            <Button asChild variant="outline" className="justify-start">
+              <Link href="/deals">
+                <KanbanSquare className="size-4" /> Open the pipeline
+              </Link>
+            </Button>
+          </div>
+        </BentoCard>
+
+        {/* AI insights — where configured */}
+        <BentoCard colSpan={12} accentModule="intelligence">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium text-foreground">AI insights</span>
+            <Badge variant="outline">Not yet configured</Badge>
+          </div>
+          <BentoEmptyState
+            title="No AI provider configured"
+            description="Contact summaries, lead prioritisation, and next-best-action suggestions will appear here once an AI provider is connected (Phase 2.8/5) — never fabricated figures in the meantime."
           />
-          <Kpi label="Won deals" value={summary.wonOpportunities} accentModule="sales" />
-          <Kpi
-            label="Lead conversion rate"
-            value={summary.conversionRate === null ? "—" : `${Math.round(summary.conversionRate * 100)}%`}
-            accentModule="crm"
-          />
-
-          <BentoCard colSpan={2} rowSpan={2} accentModule="crm">
-            <span className="text-sm font-medium text-foreground">Lead source performance</span>
-            {summary.leadsBySource.length === 0 ? (
-              <BentoEmptyState
-                title="No lead sources recorded yet"
-                description="Capture a lead with a source (e.g. Website form, Referral) to see this chart fill in."
-              />
-            ) : (
-              <LeadSourceChart data={summary.leadsBySource} />
-            )}
-          </BentoCard>
-
-          <BentoCard colSpan={2} rowSpan={2} accentModule="overview">
-            <span className="text-sm font-medium text-foreground">Recent activity</span>
-            {summary.recentActivities.length === 0 ? (
-              <BentoEmptyState
-                title="Nothing logged yet"
-                description="Calls, meetings, notes, and tasks you log against contacts, companies, leads, or deals will show up here."
-              />
-            ) : (
-              <ul className="flex flex-col gap-2 overflow-y-auto">
-                {summary.recentActivities.map((activity) => (
-                  <li key={activity.id} className="flex items-center justify-between gap-2 text-sm">
-                    <span className="truncate text-foreground">{activity.subject}</span>
-                    <span className="shrink-0 text-xs text-muted-foreground">
-                      {formatEnumLabel(activity.type)}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </BentoCard>
-
-          <BentoCard colSpan={2} accentModule="work">
-            <span className="text-sm font-medium text-foreground">Upcoming follow-ups</span>
-            {summary.upcomingFollowUps.length === 0 ? (
-              <BentoEmptyState title="Nothing due soon" description="Open tasks with a due date will appear here." />
-            ) : (
-              <ul className="flex flex-col gap-1.5">
-                {summary.upcomingFollowUps.map((task) => (
-                  <li key={task.id} className="flex items-center justify-between text-sm">
-                    <span className="truncate text-foreground">{task.subject}</span>
-                    <span className="shrink-0 text-xs text-muted-foreground">
-                      {task.dueAt?.toLocaleDateString()}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </BentoCard>
-
-          <BentoCard colSpan={2} accentModule="work">
-            <span className="text-sm font-medium text-foreground">Overdue tasks</span>
-            {summary.overdueTasksCount === 0 ? (
-              <BentoEmptyState title="Nothing overdue" description="You're on top of your open tasks." />
-            ) : (
-              <div className="flex items-center gap-2">
-                <span className="text-3xl font-semibold text-destructive">{summary.overdueTasksCount}</span>
-                <span className="text-sm text-muted-foreground">
-                  task{summary.overdueTasksCount === 1 ? "" : "s"} past due
-                </span>
-              </div>
-            )}
-          </BentoCard>
-
-          <BentoCard colSpan={4} accentModule="intelligence">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-medium text-foreground">AI insights</span>
-              <Badge variant="outline">Not yet configured</Badge>
-            </div>
-            <div className="flex items-center gap-4">
-              <AiOrb className="size-16 shrink-0" />
-              <BentoEmptyState
-                title="No AI provider configured"
-                description="Contact summaries, lead prioritisation, and next-best-action suggestions will appear here once an AI provider is connected (Phase 2.8/5) — never fabricated figures in the meantime."
-              />
-            </div>
-          </BentoCard>
-        </BentoGrid>
-      </div>
+        </BentoCard>
+      </BentoGrid>
 
       <div className="grid gap-4 sm:grid-cols-3">
         {PLANNED_WIDGETS.map((widget) => (
@@ -205,18 +245,6 @@ export default async function DashboardPage() {
             </CardContent>
           </Card>
         ))}
-      </div>
-
-      <div className="flex gap-2">
-        <Button asChild variant="outline">
-          <Link href="/contacts">View contacts</Link>
-        </Button>
-        <Button asChild variant="outline">
-          <Link href="/leads">View leads</Link>
-        </Button>
-        <Button asChild variant="outline">
-          <Link href="/deals">View pipeline</Link>
-        </Button>
       </div>
     </div>
   );
