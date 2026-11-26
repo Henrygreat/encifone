@@ -4,6 +4,14 @@ Lightweight architectural decision record. Each entry: what was decided, why, an
 
 ---
 
+## 2026-11-26 — Observed: an external process is auto-committing working-directory state to `master`
+
+**Observation, not a decision:** during Phase 2A Milestone D, two commits (`6ced885` "phase 2", `69f5fc2` "feat: Phase 2 CRM and modern dashboard enhancements") appeared on `origin/master`, authored under the repository's configured git identity, that were not the result of any `git commit` call made in this working session. One of them (`69f5fc2`) captured an in-progress, not-yet-fixed file (a Recharts typing error this session hadn't finished correcting yet) and pushed it straight to `master`. `.claude/scheduled_tasks.lock` — Claude Code's own session-local bookkeeping file, never project content — was also committed this way once.
+
+**Why this is worth recording, not alarming:** the master-first CI-gated deploy design (see the 2026-11-26 "Master-first Git workflow" entry) worked exactly as intended even though the commit itself skipped this session's own pre-commit validation discipline — `lint-and-typecheck` caught the real error and correctly blocked `build`/`docker-*`/`deploy` from running on that commit. No broken code reached (or could have reached) production. Fixed forward in the next commit rather than investigated further or reverted — the mechanism producing these commits wasn't identified (possibilities include an IDE auto-commit extension or another automated agent with access to this working directory) and wasn't in scope to track down.
+
+**Action taken:** added `/.claude/` to `.gitignore` so that specific category of accidental commit can't recur. No other change — this doesn't, by itself, change the master-first workflow or require new process, since the existing CI gate already contains the risk.
+
 ## 2026-11-26 — Phase 2A: reconciling CRM + sales pipeline + activities into one combined phase; Milestone A (design foundation) complete
 
 **Decision:** The Phase 2 kickoff request bundled Phase 2.1 (CRM: contacts/companies/leads) and Phase 2.2 (sales pipeline/opportunities) and a new cross-cutting Activities/Tasks module — never a named subphase in `docs/MASTER_ROADMAP.md` — into one combined ask, with a full premium UI/UX transformation on top. Rather than silently reordering the roadmap or dropping scope, this is recorded as **"Phase 2A — CRM & Sales Core,"** covering 2.1 + 2.2 + Activities, delivered across the 5 milestones (A–E) the request specified, before Phase 2.3 (Client 360) resumes. `docs/MASTER_ROADMAP.md` updated accordingly.

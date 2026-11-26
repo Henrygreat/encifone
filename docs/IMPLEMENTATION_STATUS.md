@@ -218,8 +218,16 @@ Milestone B is complete.
 
 Milestone C is complete.
 
+### Milestone D — Real-data dashboard (complete); 3D hero/orb and auth-page visuals not yet started
+- **`src/modules/dashboard/service.ts`** (new): `getDashboardSummary(acting)` — every figure a real, tenant-scoped aggregate query (contact/company/active-lead/open-opportunity counts, pipeline value and a probability-weighted forecast computed from each open opportunity's own probability override or its stage's default, lead conversion rate, recent activity, upcoming follow-ups, overdue task count, leads grouped by source) — never a hardcoded or fabricated number (CLAUDE.md rule 4).
+- **`/dashboard`** rewired: the existing org-info cards (member count, currency, created date) preserved; a new Bento section (`BentoGrid`/`BentoCard` from Milestone A) added below with 8 KPI cards, a Recharts lead-source bar chart (`src/components/dashboard/lead-source-chart.tsx`), recent-activity and upcoming-follow-ups panels, an overdue-tasks indicator, and an explicitly-labelled "AI insights — not yet configured" panel (no fabricated AI output). The stale "Sales pipeline value — Phase 2... not available yet" placeholder was removed now that it's real; MRR/health-scores/AI-briefing placeholders remain, since those phases haven't shipped.
+- **`src/lib/money.ts`** (new): `formatMoneyMinor` extracted as a shared helper once a second call site (the dashboard) needed the same minor-unit-to-display formatting `/deals` already had inline.
+- **Verified live, not just typechecked:** dashboard renders 200 with zero data (every widget shows its honest empty state) and again after populating a contact/lead/opportunity/overdue task — the HTML was inspected directly and shows the real computed figures (e.g. a 500000-minor-unit opportunity renders as "£5,000.00"; one overdue task renders as "1").
+- **Note on process, not product:** mid-build, an external auto-commit (not any of my own `git commit` calls — see `docs/DECISION_LOG.md`) pushed an in-progress snapshot of this work to `master` before a Recharts typing fix was in place; CI's `lint-and-typecheck` job correctly caught it and blocked `build`/`deploy` from running on that commit, exactly as the CI-gated deploy design is meant to. Fixed forward in the very next commit.
+- **Not yet started within Milestone D:** the React Three Fiber landing-page hero scene and dashboard AI-orb widget (architecture from Milestone A, no creative content yet), auth-page visual polish.
+
 ### Not yet started
-Milestone D (real-data Bento dashboard, landing-page 3D hero, dashboard AI-orb widget, auth-page visuals), Milestone E (full QA pass, `docs/CRM_USER_GUIDE.md`, final docs sweep).
+The rest of Milestone D (3D hero/orb, auth-page visuals), Milestone E (full QA pass, `docs/CRM_USER_GUIDE.md`, final docs sweep).
 
 ## Known limitations
 
