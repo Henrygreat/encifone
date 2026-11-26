@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { BentoCard, BentoEmptyState, BentoGrid } from "@/components/bento/bento-grid";
 import { LeadSourceChart } from "@/components/dashboard/lead-source-chart";
+import { AiOrb } from "@/components/three/ai-orb";
 import { formatEnumLabel } from "@/lib/utils";
 
 const PLANNED_WIDGETS: { title: string; availableFrom: string }[] = [
@@ -177,10 +178,13 @@ export default async function DashboardPage() {
               <span className="text-sm font-medium text-foreground">AI insights</span>
               <Badge variant="outline">Not yet configured</Badge>
             </div>
-            <BentoEmptyState
-              title="No AI provider configured"
-              description="Contact summaries, lead prioritisation, and next-best-action suggestions will appear here once an AI provider is connected (Phase 2.8/5) — never fabricated figures in the meantime."
-            />
+            <div className="flex items-center gap-4">
+              <AiOrb className="size-16 shrink-0" />
+              <BentoEmptyState
+                title="No AI provider configured"
+                description="Contact summaries, lead prioritisation, and next-best-action suggestions will appear here once an AI provider is connected (Phase 2.8/5) — never fabricated figures in the meantime."
+              />
+            </div>
           </BentoCard>
         </BentoGrid>
       </div>

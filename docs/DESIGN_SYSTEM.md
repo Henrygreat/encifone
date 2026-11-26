@@ -81,7 +81,12 @@ Added 2026-11-26 (Milestone A of the Phase 2A UI transformation — see `docs/DE
 - `scene-error-boundary.tsx` — `SceneErrorBoundary`, a class component (error boundaries must be) that catches a render/context-creation failure anywhere inside a `<Canvas>` subtree and swaps to the caller's static fallback instead of crashing the page.
 - `scene-canvas.tsx` — `SceneCanvas`, the single place every 3D surface mounts a `<Canvas>` through. In order: renders the caller's `fallback` if `prefers-reduced-motion` is set or WebGL isn't supported (including the `null`/not-yet-known state — never flash 3D content before that's resolved); caps device pixel ratio at `min(devicePixelRatio, 2)`; wraps the `<Canvas>` in `SceneErrorBoundary`; listens for `webglcontextlost` and logs rather than letting the page hang.
 
-**The rule every future scene must follow:** the actual creative content (hero scene, AI-orb widget, etc. — Milestone D) is a separate module, dynamically imported with `next/dynamic(..., { ssr: false })` **from a Client Component** (Next.js App Router requirement — a Server Component cannot itself call `dynamic(..., { ssr: false })`), composed inside `<SceneCanvas>`. Never import `three`/`@react-three/fiber`/`@react-three/drei` from a file that can render on the server, and never place a 3D component inside an ordinary data table, form, or operational page (per your own instruction) — decorative/hero surfaces only.
+**The rule every future scene must follow:** the actual creative content is a separate module, dynamically imported with `next/dynamic(..., { ssr: false })` **from a Client Component** (Next.js App Router requirement — a Server Component cannot itself call `dynamic(..., { ssr: false })`), composed inside `<SceneCanvas>`. Never import `three`/`@react-three/fiber`/`@react-three/drei` from a file that can render on the server, and never place a 3D component inside an ordinary data table, form, or operational page (per your own instruction) — decorative/hero surfaces only.
+
+**Creative content shipped (Milestone D):**
+- `scenes/hero-network-scene.tsx` + `hero-scene.tsx` — the landing-page hero: five module-coloured nodes orbiting a wireframe core, connecting lines, `Sparkles` particles, slow rotation plus pointer-parallax. Wired into `src/app/page.tsx`, positioned behind the hero text (`absolute -z-10` + a radial scrim), never interleaved with it.
+- `scenes/ai-orb-scene.tsx` + `ai-orb.tsx` — a small pulsing, distorted icosahedron (`MeshDistortMaterial`) for the dashboard's AI insights panel. Deliberately tiny (a 16×16 slot) and decorative only.
+- Needed `@types/three` as a dev dependency — `three@0.187.0` ships no bundled type declarations.
 
 ## 10. Marketing site visual language
 

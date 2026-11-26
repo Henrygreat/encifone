@@ -1,15 +1,33 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { branding } from "@/config/branding";
+import { HeroScene } from "@/components/three/hero-scene";
 
 /**
  * Minimal placeholder landing page. The full marketing site (docs/PRODUCT_REQUIREMENTS.md
  * §6, docs/MASTER_ROADMAP.md Phase 6+) is explicitly out of scope for Phase 1 — this
  * exists only so the root route isn't the Next.js starter page.
+ *
+ * The 3D hero (added Phase 2A Milestone D) sits in a `position: absolute`
+ * layer BEHIND the text/CTAs (`-z-10`), never interleaved with them —
+ * docs/DESIGN_SYSTEM.md §9's "keep hero text highly readable" requirement.
+ * A radial scrim over it further protects contrast for the text on top.
  */
 export default function MarketingHome() {
   return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-8 bg-background px-6 py-24 text-center">
+    <div className="relative flex flex-1 flex-col items-center justify-center gap-8 overflow-hidden bg-background px-6 py-24 text-center">
+      <div className="absolute inset-0 -z-10">
+        <HeroScene className="size-full" />
+        <div
+          aria-hidden="true"
+          className="absolute inset-0"
+          style={{
+            background:
+              "radial-gradient(ellipse at center, transparent 0%, var(--background) 75%)",
+          }}
+        />
+      </div>
+
       <span className="rounded-full border border-border bg-card px-3 py-1 text-xs font-medium text-muted-foreground">
         Building in public — Phase 1
       </span>
