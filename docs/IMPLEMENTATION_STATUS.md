@@ -1,6 +1,6 @@
 # Implementation Status — EncifOne
 
-_Last updated: 2026-11-25_
+_Last updated: 2026-11-26_
 
 > Rebranded from the working name "ClientOS AI" to **EncifOne** during the GitHub-integration pass (see "GitHub integration & branding" below). No database tables, Docker volumes, migration files, or other internal identifiers were renamed as part of this — see that section for exactly what was and wasn't touched, and why.
 
@@ -147,6 +147,31 @@ These cannot be confirmed from this working environment; `docs/DEPLOYMENT.md` §
 - Whether Coolify's zero-downtime blue-green redeploy/rollback is actually demonstrated end-to-end (the documented *conditions* for it are now met — health check + no port mapping — but the behaviour itself hasn't been observed live; `docs/ROLLBACK.md` §7 is explicit that this isn't claimed yet).
 - GitHub branch protection rules and Coolify's deploy-trigger scope (both require manual platform configuration).
 - Whether `GIT_SHA` is actually wired into Coolify's build environment from the commit it deploys.
+
+## Master-first Git workflow consolidation (2026-11-26, awaiting approval to merge)
+
+Full record: `docs/DECISION_LOG.md`. Branch: `integration/master-consolidation`, created from `master`. **Not merged into `master`, no default-branch change, no branches deleted, no Coolify deployment triggered, no production data touched — awaiting explicit approval**, per instruction.
+
+### What this consolidated
+- `develop`, `feature/phase-1.5-infra-hardening`, and `feature/phase-2.1-crm` merged into `integration/master-consolidation` (three merge commits; one conflict, in `docs/DECISION_LOG.md`, resolved by keeping all three entries). `main` confirmed to carry no unique commits beyond what `master` already has.
+- Backup tags created before any merging: `backup/main-20261126`, `backup/master-20261126`, `backup/develop-20261126`, `backup/feature-phase-1.5-infra-hardening-20261126`, `backup/feature-phase-2.1-crm-20261126`.
+
+### Real CI bugs found and fixed (not pre-existing-knowledge — each root-caused from the actual GitHub Actions run via the public check-runs annotations API, then reproduced locally before fixing)
+1. **`lint-and-typecheck` failure**: `src/app/layout.tsx` used Next's ambient `LayoutProps<"/">` type, generated only into the gitignored `.next/types/` directory by `next dev`/`next build` — CI's typecheck job never builds first, so a clean checkout genuinely lacks it (passed locally only because a prior `next dev` run had left it on disk). Fixed by typing the prop explicitly with `ReactNode` instead of depending on a generated file. Verified by removing `.next/types` locally and re-running `pnpm typecheck`/`pnpm build` clean.
+2. **`migration-integrity` false positive**: confirmed to be exactly the already-diagnosed corrupted-file state — `origin/master`/`origin/develop` never received either prior checksum-incident fix. Resolved by the `checksums.json` manifest redesign (sourced from a live database's `_prisma_migrations` table, not from comparing against another branch).
+3. **`docker-multi-network-test` failure**: initially suspected flaky, but reproduced locally and found to be a real logic bug — the port-binding check read `/proc/net/tcp`'s slot-index column instead of its local-address column, so it only ever passed by coincidence (when the app's LISTEN socket happened to be the first row) and could fail — as it did here — even when genuinely bound to `0.0.0.0:3000`, simply because a leftover connection from the job's own preceding health-check curls shifted row order. This is the exact regression check for the 502 Bad Gateway incident and was silently non-functional; fixed to parse the real address field, verified against real container output for both the old (fails) and new (passes) logic.
+
+### Migration integrity — verified to actually protect, not just rubber-stamp
+Per explicit instruction, manually tested (not just read) that `scripts/check-migration-integrity.sh` rejects tampering with an already-applied migration: (a) appending a byte to `20261125105100_init/migration.sql` → correctly fails; (b) deleting that migration's directory outright → **a real gap was found here**: the script only ever walked directories present on disk, so deleting an already-applied migration passed silently. Fixed by adding a pass that walks every name recorded in `checksums.json` and fails if its file no longer exists. Re-verified all three properties (tamper → fails, delete → fails, clean/restored → passes) after the fix.
+
+### Git workflow simplified to master-first (`CLAUDE.md` §"Git workflow" rewritten)
+`master` is now the single long-lived branch for both development and production. `main`/`develop` are kept, unused, as historical references — no new work targets them. `.github/workflows/ci.yml`'s push trigger is `[master]` only (the temporary `integration/master-consolidation` entry added mid-session purely to get a real CI signal without a `gh`-authenticated PR has been removed now that it's served its purpose).
+
+### CI-gated production deployment added (not yet exercised against a live Coolify instance)
+A `deploy` job in `.github/workflows/ci.yml`: runs only on a direct push to `master`, gated by `needs:` on every required job (lint/typecheck, migration-integrity, security, test, build, both Docker jobs), calls Coolify's deploy webhook via `curl` using two GitHub Actions secrets (`COOLIFY_WEBHOOK_URL`, `COOLIFY_WEBHOOK_TOKEN` — never printed, including the response body), and carries a `concurrency: { group: production-deploy, cancel-in-progress: false }` block so overlapping pushes queue their deployments instead of racing. Documented in `docs/DEPLOYMENT_RUNBOOK.md` §1.1–§1.2/§2: the exact secrets to add, and the exact Coolify-side change required (disable Coolify's own native "deploy on push" for this resource, since leaving it on alongside the webhook would cause two independent deployments per push). The webhook request shape (`GET` + `Authorization: Bearer`) matches Coolify's documented API but has **not been verified against this project's live Coolify instance** — flagged as pending the same way every other live-environment item in this file is.
+
+### Explicitly NOT done, by instruction
+Not merged into `master`. Default branch not changed. No branch deleted. No Coolify deployment triggered — real or test. No production database touched. No CI check bypassed, disabled, or weakened — every failure found was root-caused and fixed in the check itself.
 
 ## Known limitations
 

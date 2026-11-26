@@ -33,15 +33,15 @@ Branding (product name, taglines) is centralised in `src/config/branding.ts` —
 5. Prefer editing/extending existing modules over new abstractions. Three similar call sites beat a premature shared helper.
 6. Commit completed, tested work with a descriptive message; push completed milestones to GitHub per the workflow below. Don't leave a finished phase uncommitted.
 
-## Git workflow
+## Git workflow (master-first, adopted 2026-11-26 — see `docs/DECISION_LOG.md`)
 
-- **`master`** — the production branch; what Coolify deploys. Every commit on `master` should be deployable. (A `main` branch also exists from initial GitHub setup and is no longer used — not deleted, just superseded; see `docs/DECISION_LOG.md`.)
-- **`develop`** — ongoing integration branch for active development. Always fast-forward/merge `master`'s latest validated production fixes into `develop` before starting new work on it.
-- **`feature/<name>`** — individual features, branched from `develop`, merged back via PR (e.g. `feature/phase-2.1-crm`).
-- **`hotfix/<name>`** — urgent production fixes, branched from `master`, merged into both `master` and `develop`.
-- **Never automatically merge incomplete work into `master`.** Lint, typecheck, tests, and build must pass first (CI enforces this — see `.github/workflows/`).
+- **`master` is the single source of truth: the only long-lived branch, both for ongoing development and for production.** Every commit on `master` must pass CI (lint, typecheck, `prisma validate`, Compose config validation, security audit, tests, migration integrity, build, Docker multi-network test, Docker smoke test — `.github/workflows/ci.yml`) before it lands, and a push to `master` that passes every required job triggers production deployment via a CI-gated Coolify webhook (see `docs/DEPLOYMENT.md` §5 and `docs/DEPLOYMENT_RUNBOOK.md`).
+- Commit directly to `master` for routine, low-risk work once it passes CI locally (lint/typecheck/build/tests — see `docs/TESTING.md` §4). For a higher-risk or longer-running change (a schema migration, an infrastructure change, a multi-day feature), use a short-lived `feature/<name>` or `fix/<name>` branch off `master`, open a PR so CI validates it, then merge back into `master` and delete the branch promptly — it is not a parking lot for ongoing work.
+- **Do not create `develop` or `main` branches for future phases.** Both exist from earlier phases of this project and are kept, not deleted, as historical references (see `docs/DECISION_LOG.md`) — no new work targets them, and nothing is merged into them going forward.
+- **Never automatically merge incomplete work into `master`.** CI must pass first — never bypass or disable a required check to force a merge.
 - Tag production-ready milestones with semver (`v0.1.0`, `v0.2.0`, ...) once their acceptance criteria are met.
-- Never force-push to `master` or `develop`, and never delete or rewrite published history/branches there.
+- Never force-push to `master`, and never delete or rewrite its published history.
+- Coolify's own "deploy on push" trigger for the production resource must be **disabled** — only the CI-gated webhook deploys, so a push to `master` never triggers two independent, racing deployments. See `docs/DEPLOYMENT_RUNBOOK.md` §1.2.
 
 ## Repo conventions
 
