@@ -4,6 +4,49 @@ Lightweight architectural decision record. Each entry: what was decided, why, an
 
 ---
 
+## 2026-11-26 — Phase 1.5: production infrastructure hardening & deployment reliability
+
+**Decision:** A dedicated phase, inserted before continuing Phase 2 feature work, to permanently fix the production deployment issues this project had been hitting (Docker build errors, Prisma P1001, Docker-network isolation, Redis env-var inconsistencies, missing runtime env vars, migration checksum mismatches, incorrect reverse-proxy domain assignment, 502s, missing `NEXTAUTH_URL`, and the Next.js container-hostname binding bug). Full operational detail lives in the new `docs/DEPLOYMENT_RUNBOOK.md`, `docs/TROUBLESHOOTING.md`, and `docs/ROLLBACK.md` — this entry is the decision record, not the how-to.
+
+**Confirmed root causes** (verified against actual source/runtime behaviour, not assumed):
+1. **Next.js standalone binding** — already fixed in Phase 1.1 on `develop`, but that fix had never reached `master`/production (only direct "env" commits to `master` existed, and they didn't include the Dockerfile change). This alone explains the reported "Coolify network works, project-specific network refused" symptom: binding to one interface IP instead of `0.0.0.0` is reachable only via whichever network happens to route to that IP.
+2. **NextAuth `secret` never wired.** `src/lib/auth.ts` never passed `secret` to NextAuth v4's config, so it was falling back to auto-detecting `process.env.NEXTAUTH_SECRET` — a variable this project never sets (its own name is `AUTH_SECRET`). Fixed: `secret: env.AUTH_SECRET` passed explicitly.
+3. **`NEXTAUTH_URL` never set.** Fixed: `src/lib/env.ts`'s `ensureNextAuthUrl()` defaults it from `APP_URL` as a documented side effect, imported before any auth code runs.
+4. **`PORT` never explicit.** Worked by Next's own default, but implicit — now explicit in both the Dockerfile and compose.
+
+**What changed:**
+- `src/lib/env.ts` — added `NEXTAUTH_URL` (optional, defaulted from `APP_URL`) and `PORT` (defaulted to 3000); documented which variables are build-time/runtime/optional/dev-only/secret (also reflected in the rewritten `.env.example`).
+- `src/lib/auth.ts` — explicit `secret: env.AUTH_SECRET`.
+- `src/lib/health.ts` (new) + `/api/health/live` + `/api/health/ready` — split liveness from readiness; `/api/health` kept as a backward-compatible alias of `/ready`. Each dependency check has a bounded 3s timeout.
+- `src/workers/index.ts` — heartbeat file (touched every 15s) for Docker-level health monitoring (the worker has no HTTP port to probe), plus proper `SIGTERM`/`SIGINT` handling that waits for an in-flight job before closing.
+- `Dockerfile` — `PORT=3000` explicit; `HEALTHCHECK`s now point at `/api/health/ready` (app) and a heartbeat-freshness check (worker); both runtime stages run as the non-root `node` user; `GIT_SHA` build arg baked into `/app/GIT_SHA` in every image for version tracking (`docs/ROLLBACK.md`).
+- `docker-compose.yml` — `NODE_ENV`/`HOSTNAME`/`PORT` set explicitly at the compose level too (belt-and-suspenders with the Dockerfile); `deploy.resources.limits` added per service; **`app`'s `ports: ["3000:3000"]` mapping removed** (moved to `docker-compose.local.yml` only) — see the dedicated entry below for why.
+- `.gitattributes` (new) — forces LF line endings for `prisma/migrations/**/*.sql` (and sane repo-wide defaults), to stop `core.autocrlf=true` from silently breaking migration checksums on branch switches — this had already happened twice (see the entry below).
+- `scripts/` (new directory) — `validate-env.sh`, `deploy-preflight.sh`, `deploy-verify.sh`, `diagnose-deployment.sh`, `check-migration-integrity.sh`. All non-destructive; none print secret values. Each one was actually run and its output verified during this work, not just written.
+- `.github/workflows/ci.yml` — added `migration-integrity`, Compose config validation, `docker-multi-network-test` (reproduces the exact production incident — builds the real `app` image, attaches two Docker networks, asserts reachability through both), and `docker-smoke-test` (builds and runs the actual `migrate`/`app`/`worker` images, not the dev server, including a full auth round trip and a worker-heartbeat check).
+
+**Removing `app`'s published host port — evidence, not a guess:** two independent signals pointed the same way. First, the live production diagnostics showed Traefik already routing to the app via the Coolify-managed Docker network, not a published host port. Second, Coolify's own documentation states zero-downtime blue-green redeploys/rollbacks require a health check (now present) *and no published port* on that service — with one published, a new container can't bind the same host port until the old one is removed, forcing a gap instead of a clean cutover. **Not yet verified live**: whether removing it affects Coolify's UI ability to (re)assign a domain to `app` — flagged explicitly in `docs/IMPLEMENTATION_STATUS.md` as pending, with a one-line revert documented in `docs/TROUBLESHOOTING.md` if it turns out to matter.
+
+**GitHub branch protection / Coolify deploy-trigger configuration:** could not be applied directly — the `gh` CLI was not available in this working environment. Exact manual steps are documented in `docs/DEPLOYMENT_RUNBOOK.md` §1.1–§1.2 instead.
+
+**Explicitly not done, by instruction:** no merge into `master`, no Coolify deployment triggered, no production database touched, no staging environment actually provisioned (designed only, `docs/DEPLOYMENT_RUNBOOK.md` §5), no `main` branch deleted.
+
+**Validated:** full local stack rebuild after every change (not just at the end); `app`/`worker` both report Docker-healthy; `/proc/net/tcp` inside the app container confirmed `0.0.0.0:3000`; a full register → sign-in → session → authenticated-API-call round trip passed against the rebuilt stack; `scripts/check-migration-integrity.sh` tested against both a clean state and a deliberately-tampered commit (confirmed it actually catches a violation, not just that it passes); lint/typecheck/tests/build all pass. See `docs/IMPLEMENTATION_STATUS.md` for the full record including what remains pending live-environment verification.
+
+---
+
+## 2026-11-26 — Applied migration checksum incident, round two: fix was isolated to the wrong branch
+
+**Decision:** No new policy beyond rule 13 (already added) — this entry records a second occurrence of the same class of incident, caused by a process gap rather than a new root cause, and the fix.
+
+**What happened:** the original checksum fix (reverting a migration file's comment text + line endings to match its applied checksum) was performed on `feature/phase-2.1-crm` only. It was never merged into `develop`. When `feature/phase-1.5-infra-hardening` was later branched from `develop` (correctly, per instruction, to keep infra work separate from CRM feature work), it inherited `develop`'s *unfixed* copy of that migration file — reintroducing the identical checksum mismatch against the same shared local database (git branches share one Docker volume locally; the database doesn't care which branch is checked out).
+
+**Fix:** re-applied the same two-part fix (revert the comment text to its original wording; convert CRLF back to LF — confirmed `core.autocrlf=true` reconverts it on every branch checkout) directly on `feature/phase-1.5-infra-hardening`, and added `.gitattributes` (see the main Phase 1.5 entry above) so this cannot recur regardless of local git config. The underlying fix still needs to reach `develop` properly (via whichever branch merges first) so a third branch made from `develop` doesn't inherit the same stale state.
+
+**Verified:** `sha256sum` of the restored file matches `_prisma_migrations.checksum` exactly; `prisma migrate status` reports "up to date"; the other applied migration unaffected.
+
+---
+
 ## 2026-11-26 — Phase 2 scope reconciliation: subphases, with two narrow pull-forwards from Phase 3
 
 **Decision:** `docs/MASTER_ROADMAP.md`'s single "Phase 2" entry is decomposed into subphases 2.1–2.8 (CRM foundation, sales pipeline, client workspace, service catalogue, proposals, contracts, payments/conversion, AI sales intelligence), each on its own feature branch. This is the same Phase 2 scope as originally planned, broken down to the detail level requested at Phase 2 kickoff — not a scope expansion.

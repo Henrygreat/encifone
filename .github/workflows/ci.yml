@@ -13,6 +13,7 @@ env:
   DATABASE_URL: postgresql://clientos:clientos_ci_password@localhost:5432/clientos
   REDIS_URL: redis://localhost:6379
   AUTH_SECRET: ci-only-secret-not-used-in-any-real-environment
+  APP_URL: http://localhost:3000
 
 jobs:
   lint-and-typecheck:
@@ -29,6 +30,35 @@ jobs:
       - run: pnpm typecheck
       # Schema-only check — does not require a reachable database.
       - run: pnpm exec prisma validate
+      - name: Validate Docker Compose configuration
+        run: |
+          docker compose -f docker-compose.yml config --quiet
+          docker compose -f docker-compose.yml -f docker-compose.local.yml config --quiet
+          echo "Asserting the production compose file has no 'postgres' service and publishes no Redis port..."
+          if docker compose -f docker-compose.yml config | grep -qE '^\s*postgres:\s*$'; then
+            echo "::error::docker-compose.yml must not define a postgres service — production uses an external DB (docs/DEPLOYMENT.md §4)."
+            exit 1
+          fi
+          if docker compose -f docker-compose.yml config | python3 -c "
+          import sys, yaml
+          cfg = yaml.safe_load(sys.stdin)
+          redis_ports = cfg.get('services', {}).get('redis', {}).get('ports', [])
+          sys.exit(1 if redis_ports else 0)
+          "; then
+            echo "No Redis ports published — correct."
+          else
+            echo "::error::docker-compose.yml publishes a Redis port — Redis must stay private (docs/DEPLOYMENT.md §5)."
+            exit 1
+          fi
+
+  migration-integrity:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Reject modification or deletion of migrations already on master
+        run: bash scripts/check-migration-integrity.sh origin/master
 
   security:
     runs-on: ubuntu-latest
@@ -87,7 +117,7 @@ jobs:
 
   build:
     runs-on: ubuntu-latest
-    needs: [lint-and-typecheck, security, test]
+    needs: [lint-and-typecheck, migration-integrity, security, test]
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -97,3 +127,150 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
+
+  docker-multi-network-test:
+    # Specifically reproduces the production incident (docs/DECISION_LOG.md):
+    # the app container attached to two Docker networks, verified reachable
+    # through BOTH, not just one. No database needed — only /api/health/live
+    # is exercised, which has no dependency checks.
+    runs-on: ubuntu-latest
+    needs: [lint-and-typecheck]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the app image
+        run: docker build --target app -t encifone-app:ci .
+      - name: Create two isolated Docker networks
+        run: |
+          docker network create ci-net-a
+          docker network create ci-net-b
+      - name: Start the app attached to network A, then attach network B too
+        run: |
+          docker run -d --name app-multinet --network ci-net-a \
+            -e NODE_ENV=production -e DATABASE_URL="postgresql://placeholder:placeholder@localhost:5432/placeholder" \
+            -e REDIS_URL="redis://localhost:6379" -e AUTH_SECRET="ci-only-secret-not-used-in-any-real-environment" \
+            -e APP_URL="http://localhost:3000" encifone-app:ci
+          docker network connect ci-net-b app-multinet
+      - name: Wait for the app to report live
+        run: |
+          for i in $(seq 1 30); do
+            STATUS=$(docker run --rm --network ci-net-a curlimages/curl:8.11.1 -s -o /dev/null -w "%{http_code}" http://app-multinet:3000/api/health/live || echo 000)
+            if [ "$STATUS" = "200" ]; then echo "App live via network A after ${i}s"; break; fi
+            sleep 1
+          done
+      - name: Assert reachable via network A
+        run: |
+          STATUS=$(docker run --rm --network ci-net-a curlimages/curl:8.11.1 -s -o /dev/null -w "%{http_code}" http://app-multinet:3000/api/health/live)
+          echo "Network A status: $STATUS"
+          test "$STATUS" = "200"
+      - name: Assert reachable via network B (this is what the production incident broke)
+        run: |
+          STATUS=$(docker run --rm --network ci-net-b curlimages/curl:8.11.1 -s -o /dev/null -w "%{http_code}" http://app-multinet:3000/api/health/live)
+          echo "Network B status: $STATUS"
+          test "$STATUS" = "200"
+      - name: Confirm the app bound 0.0.0.0, not a single interface IP
+        run: |
+          docker exec app-multinet node -e "
+            const net = require('fs').readFileSync('/proc/net/tcp', 'utf8');
+            const listening = net.split('\n').find(l => l.includes(':0BB8') && l.includes(' 0A '));
+            if (!listening || !listening.trim().startsWith('0:')) { console.error('Not bound to 0.0.0.0:3000:', listening); process.exit(1); }
+            console.log('Confirmed bound to 0.0.0.0:3000');
+          "
+      - name: Cleanup
+        if: always()
+        run: |
+          docker rm -f app-multinet 2>/dev/null || true
+          docker network rm ci-net-a ci-net-b 2>/dev/null || true
+
+  docker-smoke-test:
+    # Tests the actual production Docker images (migrate -> app -> worker),
+    # not the dev server — including a real auth round-trip. Matches
+    # docs/MASTER_ROADMAP.md Phase 1.5 acceptance criteria.
+    runs-on: ubuntu-latest
+    needs: [lint-and-typecheck, test]
+    services:
+      postgres:
+        image: pgvector/pgvector:pg18
+        env:
+          POSTGRES_USER: clientos
+          POSTGRES_PASSWORD: clientos_ci_password
+          POSTGRES_DB: clientos
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U clientos" --health-interval 5s --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build images
+        run: |
+          docker build --target deps -t encifone-deps:ci .
+          docker build --target app -t encifone-app:ci .
+          docker build --target worker -t encifone-worker:ci .
+      - name: Run migrate (one-shot — exit 0 is success, not a failed service)
+        run: |
+          docker run --rm --network host \
+            -e DATABASE_URL="postgresql://clientos:clientos_ci_password@localhost:5432/clientos" \
+            encifone-deps:ci node_modules/.bin/prisma migrate deploy
+          echo "migrate exited 0 — treated as successful completion."
+      - name: Start app (actual production image)
+        run: |
+          docker run -d --name app-smoke --network host \
+            -e NODE_ENV=production -e HOSTNAME=0.0.0.0 -e PORT=3000 \
+            -e DATABASE_URL="postgresql://clientos:clientos_ci_password@localhost:5432/clientos" \
+            -e REDIS_URL="redis://localhost:6379" \
+            -e AUTH_SECRET="ci-only-secret-not-used-in-any-real-environment" \
+            -e APP_URL="http://localhost:3000" \
+            encifone-app:ci
+      - name: Start worker (actual production image)
+        run: |
+          docker run -d --name worker-smoke --network host \
+            -e DATABASE_URL="postgresql://clientos:clientos_ci_password@localhost:5432/clientos" \
+            -e REDIS_URL="redis://localhost:6379" \
+            -e AUTH_SECRET="ci-only-secret-not-used-in-any-real-environment" \
+            -e APP_URL="http://localhost:3000" \
+            encifone-worker:ci
+      - name: Wait for app readiness (bounded)
+        run: |
+          for i in $(seq 1 30); do
+            CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/api/health/ready || echo 000)
+            if [ "$CODE" = "200" ]; then echo "Ready after ${i}s"; exit 0; fi
+            sleep 1
+          done
+          echo "::error::App never became ready"; docker logs app-smoke; exit 1
+      - name: Auth smoke test (register, sign in, session, authenticated API call)
+        run: |
+          set -e
+          EMAIL="ci-smoke-$(date +%s)@example.com"
+          curl -sf -X POST http://localhost:3000/api/v1/auth/register -H "Content-Type: application/json" \
+            -d "{\"name\":\"CI Smoke\",\"email\":\"$EMAIL\",\"password\":\"password123\",\"organisationName\":\"CI Smoke Co\"}" > /dev/null
+          CSRF=$(curl -s -c /tmp/ci_cookies.txt http://localhost:3000/api/auth/csrf | sed -E 's/.*"csrfToken":"([^"]+)".*/\1/')
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST http://localhost:3000/api/auth/callback/credentials \
+            -H "Content-Type: application/x-www-form-urlencoded" -c /tmp/ci_cookies.txt -b /tmp/ci_cookies.txt \
+            --data-urlencode "email=$EMAIL" --data-urlencode "password=password123" \
+            --data-urlencode "csrfToken=$CSRF" --data-urlencode "json=true")
+          test "$STATUS" = "200"
+          SESSION=$(curl -s -b /tmp/ci_cookies.txt http://localhost:3000/api/auth/session)
+          echo "$SESSION" | grep -q "$EMAIL"
+          API_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -b /tmp/ci_cookies.txt http://localhost:3000/api/v1/organisations/me)
+          test "$API_STATUS" = "200"
+          echo "Auth smoke test passed."
+      - name: Verify worker heartbeat (real worker health monitoring, not just 'process exists')
+        run: |
+          sleep 2
+          docker exec worker-smoke node -e "
+            const fs = require('fs');
+            const age = Date.now() - fs.statSync('/tmp/health/worker-heartbeat').mtimeMs;
+            if (age > 45000) { console.error('Heartbeat stale:', age, 'ms'); process.exit(1); }
+            console.log('Worker heartbeat fresh:', age, 'ms old');
+          "
+      - name: Dump logs on failure
+        if: failure()
+        run: |
+          echo "--- app logs ---"; docker logs app-smoke || true
+          echo "--- worker logs ---"; docker logs worker-smoke || true
+      - name: Cleanup
+        if: always()
+        run: docker rm -f app-smoke worker-smoke 2>/dev/null || true

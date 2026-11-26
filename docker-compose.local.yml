@@ -53,6 +53,10 @@ services:
   app:
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-clientos}:${POSTGRES_PASSWORD:-clientos_dev_password}@postgres:5432/${POSTGRES_DB:-clientos}
+    # Published here, not in the base file — see docker-compose.yml's
+    # comment on `app` for why production deliberately has no host port.
+    ports:
+      - "3000:3000"
     depends_on:
       postgres:
         condition: service_healthy
