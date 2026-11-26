@@ -155,12 +155,25 @@ jobs:
             -e APP_URL="http://localhost:3000" encifone-app:ci
           docker network connect ci-net-b app-multinet
       - name: Wait for the app to report live
+        # Bounded by actual elapsed time, not iteration count — each
+        # iteration also pays curlimages/curl container start-up cost, so a
+        # fixed "30 iterations" budget was observed to under-count on a
+        # loaded runner and silently fall through without failing (the
+        # next step's single curl attempt then failed on pure timing, not
+        # a real app/network defect — flake found during the 2026-11-26
+        # master-first consolidation). This step now fails loudly itself
+        # if the app never comes up within the real deadline.
         run: |
-          for i in $(seq 1 30); do
-            STATUS=$(docker run --rm --network ci-net-a curlimages/curl:8.11.1 -s -o /dev/null -w "%{http_code}" http://app-multinet:3000/api/health/live || echo 000)
-            if [ "$STATUS" = "200" ]; then echo "App live via network A after ${i}s"; break; fi
-            sleep 1
+          deadline=$((SECONDS + 90))
+          until [ "$(docker run --rm --network ci-net-a curlimages/curl:8.11.1 -s -o /dev/null -w "%{http_code}" http://app-multinet:3000/api/health/live 2>/dev/null || echo 000)" = "200" ]; do
+            if [ "$SECONDS" -ge "$deadline" ]; then
+              echo "::error::App never reported live within 90s"
+              docker logs app-multinet || true
+              exit 1
+            fi
+            sleep 2
           done
+          echo "App live via network A after ${SECONDS}s"
       - name: Assert reachable via network A
         run: |
           STATUS=$(docker run --rm --network ci-net-a curlimages/curl:8.11.1 -s -o /dev/null -w "%{http_code}" http://app-multinet:3000/api/health/live)
@@ -172,11 +185,23 @@ jobs:
           echo "Network B status: $STATUS"
           test "$STATUS" = "200"
       - name: Confirm the app bound 0.0.0.0, not a single interface IP
+        # /proc/net/tcp's first column is a slot index, not the bound
+        # address — a previous version of this check matched against that
+        # index (coincidentally correct only when the listening socket
+        # happened to be row 0), so a leftover TIME_WAIT/CLOSE_WAIT entry
+        # from the health-check curls in the steps above could reorder the
+        # table and fail this check nondeterministically with no actual
+        # binding regression. Fixed to read the real local_address column.
         run: |
           docker exec app-multinet node -e "
             const net = require('fs').readFileSync('/proc/net/tcp', 'utf8');
-            const listening = net.split('\n').find(l => l.includes(':0BB8') && l.includes(' 0A '));
-            if (!listening || !listening.trim().startsWith('0:')) { console.error('Not bound to 0.0.0.0:3000:', listening); process.exit(1); }
+            const line = net.split('\n').slice(1).find(l => {
+              const c = l.trim().split(/\s+/);
+              return c[1] && c[1].endsWith(':0BB8') && c[3] === '0A';
+            });
+            if (!line) { console.error('No LISTEN socket found on port 3000:', net); process.exit(1); }
+            const addrHex = line.trim().split(/\s+/)[1].split(':')[0];
+            if (addrHex !== '00000000') { console.error('Not bound to 0.0.0.0:3000, local_address hex was', addrHex); process.exit(1); }
             console.log('Confirmed bound to 0.0.0.0:3000');
           "
       - name: Cleanup
