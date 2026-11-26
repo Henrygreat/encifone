@@ -4,6 +4,23 @@ Lightweight architectural decision record. Each entry: what was decided, why, an
 
 ---
 
+## 2026-11-26 — Applied Prisma migrations are immutable; checksum incident fixed without a reset
+
+**Decision:** Previously-applied Prisma migration files must never be modified after the fact — not for a comment, formatting, or a stale doc-link reference. Codified as CLAUDE.md non-negotiable rule 13. All future schema changes go in new migration files.
+
+**Incident:** The repo-wide `docs/ROADMAP.md` → `docs/MASTER_ROADMAP.md` rename swept a comment inside the already-applied `20261125124136_enable_pgvector/migration.sql`. Prisma's checksum (computed from exact file bytes, including line endings) no longer matched what was recorded in `_prisma_migrations`, and `prisma migrate status`/`migrate dev` offered only `prisma migrate reset` (wipes the database) as a CLI-native fix — forbidden by rule 9 without explicit approval for that specific destructive action.
+
+**Fix (no reset, no manual `_prisma_migrations` edit — both declined):** reverted the migration file's comment text to its original wording, and separately restored its original LF line endings (the working-tree copy had been converted to CRLF by git's `core.autocrlf=true` on an intervening checkout — the file as originally applied, written directly to disk before any git round-trip, was LF). `docs/MASTER_ROADMAP.md` itself was **not** renamed back — only the stale in-migration reference was reverted, so one historical migration comment now says "`docs/ROADMAP.md`" even though that file is now `docs/MASTER_ROADMAP.md`. This is intentional: migration files are an immutable historical record, not living documentation.
+
+**Verified:**
+- `sha256sum` of the restored file matches `_prisma_migrations.checksum` exactly (`d3296a2ac9...`).
+- The other applied migration (`20261125105100_init`) checksummed and compared too — unaffected, no drift.
+- `prisma validate` — schema valid. `prisma migrate status` — "Database schema is up to date!"
+- Lint, typecheck, automated tests (9/9), and `pnpm build` all pass.
+- No `_prisma_migrations` row was edited manually; no database was reset, dropped, or had data modified; no migration file was deleted; nothing was pushed or merged to `master`; no Coolify deploy was triggered. All work stayed on `feature/phase-2.1-crm`.
+
+---
+
 ## 2026-11-26 — Phase 2 scope reconciliation: subphases, with two narrow pull-forwards from Phase 3
 
 **Decision:** `docs/MASTER_ROADMAP.md`'s single "Phase 2" entry is decomposed into subphases 2.1–2.8 (CRM foundation, sales pipeline, client workspace, service catalogue, proposals, contracts, payments/conversion, AI sales intelligence), each on its own feature branch. This is the same Phase 2 scope as originally planned, broken down to the detail level requested at Phase 2 kickoff — not a scope expansion.

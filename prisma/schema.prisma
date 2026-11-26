@@ -1,6 +1,6 @@
-// EncifOne — Phase 1 schema: identity & platform domain only.
+// EncifOne — identity/platform (Phase 1) + CRM foundation (Phase 2.1) schema.
 // See docs/DATABASE_SCHEMA.md for the full planned domain model.
-// Additional domain modules (crm, sales, projects, finance, ...) are added
+// Additional domain modules (sales, projects, finance, ...) are added
 // in their own phases per docs/MASTER_ROADMAP.md, not scaffolded ahead of need.
 
 generator client {
@@ -84,8 +84,13 @@ model Organisation {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  memberships Membership[]
-  auditLogs   AuditLog[]
+  memberships   Membership[]
+  auditLogs     AuditLog[]
+  companies     Company[]
+  contacts      Contact[]
+  leads         Lead[]
+  customFields  CustomFieldDefinition[]
+  customValues  CustomFieldValue[]
 }
 
 enum MembershipRole {
@@ -129,6 +134,10 @@ model Membership {
   user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
 
+  ownedCompanies Company[] @relation("CompanyOwner")
+  ownedContacts  Contact[] @relation("ContactOwner")
+  ownedLeads     Lead[]    @relation("LeadOwner")
+
   @@unique([userId, organisationId])
   @@index([organisationId, status])
 }
@@ -148,4 +157,235 @@ model AuditLog {
   organisation Organisation? @relation(fields: [organisationId], references: [id], onDelete: SetNull)
 
   @@index([organisationId, createdAt])
+}
+
+// --- CRM foundation (Phase 2.1) ---
+// See docs/MASTER_ROADMAP.md Phase 2.1 and docs/DATABASE_SCHEMA.md §3 (CRM).
+
+enum CompanyStatus {
+  ACTIVE
+  INACTIVE
+  ARCHIVED
+}
+
+enum ContactStatus {
+  ACTIVE
+  INACTIVE
+  ARCHIVED
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  QUALIFIED
+  UNQUALIFIED
+  CONVERTED
+  LOST
+  ARCHIVED
+}
+
+enum LeadPriority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+model Company {
+  id                  String        @id @default(cuid())
+  organisationId      String
+  name                String
+  tradingName         String?
+  registrationNumber  String?
+  industry            String?
+  companySize         String?
+  website             String?
+  email               String?
+  phone               String?
+  billingAddress      Json?
+  operatingAddress    Json?
+  country             String?
+  currency            String        @default("GBP")
+  taxRegistrationNumber String?
+  ownerId             String?
+  status              CompanyStatus @default(ACTIVE)
+  logoUrl             String?
+  parentCompanyId     String?
+  tags                String[]      @default([])
+  notes               String?
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+  deletedAt           DateTime?
+
+  organisation   Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  owner          Membership?  @relation("CompanyOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  parentCompany  Company?     @relation("CompanyHierarchy", fields: [parentCompanyId], references: [id], onDelete: SetNull)
+  subsidiaries   Company[]    @relation("CompanyHierarchy")
+  contacts       Contact[]
+  leads          Lead[]
+
+  @@index([organisationId, status])
+  @@index([organisationId, name])
+  @@index([organisationId, deletedAt])
+}
+
+model Contact {
+  id                        String        @id @default(cuid())
+  organisationId            String
+  companyId                 String?
+  firstName                 String
+  lastName                  String
+  jobTitle                  String?
+  department                String?
+  // Each entry: { address, label, isPrimary }
+  emails                    Json          @default("[]")
+  // Each entry: { number, label, isPrimary }
+  phones                    Json          @default("[]")
+  preferredChannel          String?
+  timezone                  String?
+  language                  String?
+  ownerId                   String?
+  status                    ContactStatus @default(ACTIVE)
+  leadSource                String?
+  communicationPreferences  Json?
+  marketingConsent          Boolean       @default(false)
+  tags                      String[]      @default([])
+  notes                     String?
+  createdAt                 DateTime      @default(now())
+  updatedAt                 DateTime      @updatedAt
+  deletedAt                 DateTime?
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  company      Company?     @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  owner        Membership?  @relation("ContactOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  leads        Lead[]
+
+  @@index([organisationId, status])
+  @@index([organisationId, companyId])
+  @@index([organisationId, deletedAt])
+}
+
+model Lead {
+  id                  String       @id @default(cuid())
+  organisationId      String
+  firstName           String?
+  lastName             String?
+  email                String?
+  phone                String?
+  // Free-text until qualified onto a real Company record.
+  companyName          String?
+  companyId            String?
+  contactId            String?
+  source               String?
+  status               LeadStatus   @default(NEW)
+  priority             LeadPriority @default(MEDIUM)
+  estimatedValueMinor  Int?
+  currency             String       @default("GBP")
+  ownerId              String?
+  nextFollowUpAt       DateTime?
+  convertedAt          DateTime?
+  rejectedReason       String?
+  // Schema foundation only — AI-generated scoring itself is Phase 2.8.
+  score                Int?
+  tags                 String[]     @default([])
+  notes                String?
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
+  deletedAt            DateTime?
+
+  organisation     Organisation          @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  company          Company?              @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  contact          Contact?              @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  owner            Membership?           @relation("LeadOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  ownershipHistory LeadOwnershipHistory[]
+
+  @@index([organisationId, status])
+  @@index([organisationId, ownerId])
+  @@index([organisationId, deletedAt])
+}
+
+// "Lead ownership history" (docs/PRODUCT_REQUIREMENTS.md §6.2) — a dedicated
+// append-only table rather than overloading AuditLog, since reassignment
+// needs structured from/to querying (e.g. "leads this rep used to own").
+model LeadOwnershipHistory {
+  id          String   @id @default(cuid())
+  leadId      String
+  fromOwnerId String?
+  toOwnerId   String?
+  changedAt   DateTime @default(now())
+
+  lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([leadId, changedAt])
+}
+
+enum CustomFieldEntityType {
+  COMPANY
+  CONTACT
+  LEAD
+}
+
+enum CustomFieldType {
+  TEXT
+  LONG_TEXT
+  NUMBER
+  CURRENCY
+  DATE
+  DATETIME
+  BOOLEAN
+  SELECT
+  MULTI_SELECT
+  URL
+  EMAIL
+  PHONE
+}
+
+// Org-defined extra fields on Company/Contact/Lead. Values are stored
+// separately (CustomFieldValue) in a polymorphic entity-attribute-value
+// table — Prisma has no native polymorphic relation, so entityId is a
+// plain string resolved against `entityType` in the service layer, never
+// trusted as a foreign key by the database itself. Known tradeoff: EAV
+// doesn't suit heavy cross-object BI at scale — acceptable for Phase 2.1's
+// org-defined-fields use case; a materialised reporting layer can be added
+// later without changing this table (see docs/DATABASE_SCHEMA.md).
+model CustomFieldDefinition {
+  id             String                @id @default(cuid())
+  organisationId String
+  entityType     CustomFieldEntityType
+  key            String
+  label          String
+  type           CustomFieldType
+  // For SELECT/MULTI_SELECT: [{ value, label }, ...]
+  options        Json?
+  required       Boolean               @default(false)
+  position       Int                   @default(0)
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+
+  organisation Organisation       @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  values       CustomFieldValue[]
+
+  @@unique([organisationId, entityType, key])
+  @@index([organisationId, entityType])
+}
+
+model CustomFieldValue {
+  id             String                @id @default(cuid())
+  organisationId String
+  fieldId        String
+  entityType     CustomFieldEntityType
+  entityId       String
+  valueText      String?
+  valueNumber    Decimal?              @db.Decimal(18, 4)
+  valueBoolean   Boolean?
+  valueDate      DateTime?
+  // For MULTI_SELECT: string[] of selected option values.
+  valueJson      Json?
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+
+  field        CustomFieldDefinition @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+  organisation Organisation          @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+
+  @@unique([fieldId, entityId])
+  @@index([organisationId, entityType, entityId])
 }
