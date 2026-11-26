@@ -1,0 +1,6 @@
+{
+  "_comment": "Authoritative record of each migration's verified checksum, sourced from a real database's _prisma_migrations table — see scripts/check-migration-integrity.sh header. Never hand-edit.",
+  "20261125105100_init": "93f3ce8d9793420b89e07a3ef52d3684d1a60ef9e4f43f08f0c75fad11c618b2",
+  "20261125124136_enable_pgvector": "d3296a2ac93030038dfb379700f73cf40893b686f49167601e623134e6a59d0f",
+  "20261126132605_crm_foundation": "7fc26dec13d95110a72ad0ab5ffac939f37df776d77fcfa4db79b32e9b18aee7"
+}

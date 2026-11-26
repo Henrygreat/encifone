@@ -52,13 +52,17 @@ jobs:
           fi
 
   migration-integrity:
+    # Checks every migration file against prisma/migrations/checksums.json
+    # (sourced from a real database's _prisma_migrations table, not from
+    # comparing against another branch — a branch's own history can carry a
+    # corrupted migration file, which is exactly what happened to
+    # master/develop here; see docs/DECISION_LOG.md). No database or
+    # dependency install needed — it's a pure file read.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Reject modification or deletion of migrations already on master
-        run: bash scripts/check-migration-integrity.sh origin/master
+      - name: Verify every migration matches its recorded applied checksum
+        run: bash scripts/check-migration-integrity.sh
 
   security:
     runs-on: ubuntu-latest

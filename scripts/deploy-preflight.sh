@@ -50,8 +50,8 @@ else
   ok "No postgres service in the production compose file."
 fi
 
-step "Migration integrity vs. origin/master"
-if bash scripts/check-migration-integrity.sh origin/master; then
+step "Migration integrity vs. recorded checksums"
+if bash scripts/check-migration-integrity.sh; then
   ok "No previously-applied migration has been modified or deleted."
 else
   bad "Migration integrity check failed — see above."
