@@ -34,13 +34,13 @@ Branding (product name, taglines) is centralised in `src/config/branding.ts` —
 
 ## Git workflow
 
-- **`main`** — stable, production-ready releases only. Every commit on `main` should be deployable.
-- **`develop`** — ongoing integration branch for active development.
-- **`feature/<name>`** — individual features, branched from `develop`, merged back via PR.
-- **`hotfix/<name>`** — urgent production fixes, branched from `main`, merged into both `main` and `develop`.
-- **Never merge untested changes into `main`.** Lint, typecheck, tests, and build must pass first (CI enforces this — see `.github/workflows/`).
+- **`master`** — the production branch; what Coolify deploys. Every commit on `master` should be deployable. (A `main` branch also exists from initial GitHub setup and is no longer used — not deleted, just superseded; see `docs/DECISION_LOG.md`.)
+- **`develop`** — ongoing integration branch for active development. Always fast-forward/merge `master`'s latest validated production fixes into `develop` before starting new work on it.
+- **`feature/<name>`** — individual features, branched from `develop`, merged back via PR (e.g. `feature/phase-2.1-crm`).
+- **`hotfix/<name>`** — urgent production fixes, branched from `master`, merged into both `master` and `develop`.
+- **Never automatically merge incomplete work into `master`.** Lint, typecheck, tests, and build must pass first (CI enforces this — see `.github/workflows/`).
 - Tag production-ready milestones with semver (`v0.1.0`, `v0.2.0`, ...) once their acceptance criteria are met.
-- Never force-push to `main` or `develop`, and never rewrite published history there.
+- Never force-push to `master` or `develop`, and never delete or rewrite published history/branches there.
 
 ## Repo conventions
 

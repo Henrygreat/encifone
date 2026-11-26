@@ -35,12 +35,24 @@ Scope: connected the repository to GitHub (`main`/`develop` branching, CI), rebr
 - Production compose path (`docker-compose.yml` alone) defines no Postgres container and publishes no public port for Postgres/Redis.
 - Lint, typecheck, `prisma validate`, dependency audit, automated tests, and both local and Docker production builds all pass against PostgreSQL 18 + pgvector.
 
-### Phase 2 — CRM + Sales minimal + Proposal/Contract + Payment (deposit)
-Scope: Lead/Contact/Company CRUD + CSV import, one pipeline + Kanban, Proposal builder (template + dynamic variables, no marketplace yet), e-signature integration (one provider), Stripe test-mode checkout for deposit, webhook handling + `FinancialEvent` ledger.
-**Acceptance criteria:** steps 4–9 of the vertical slice work end-to-end in a staging environment with a real (test-mode) Stripe payment and a real e-sign completion.
+### Phase 2 — Intelligent CRM, Sales Pipeline & Client Acquisition
+Decomposed into subphases (reconciled 2026-11-26 — see `docs/DECISION_LOG.md`), each on its own `feature/phase-2.N-*` branch, merged to `develop` only once its own acceptance criteria pass. Original single-phase scope ("Lead/Contact/Company CRUD + CSV import, one pipeline + Kanban, Proposal builder, e-signature, Stripe test-mode deposit") is preserved — this is that same scope broken down to match the detail level requested at kickoff, plus two deliberate, narrow pull-forwards from Phase 3 (noted below).
 
-### Phase 3 — Client 360 + Portal + Onboarding
-Scope: Client record creation on deal-won, basic AI Memory (manual + one AI-extracted example), white-label portal shell with invitation flow, one onboarding checklist template.
+- **2.1 — Intelligent CRM foundation:** Company/Contact/Lead models, custom fields, tags, search/filter/saved views, CSV import/export, dedup/merge, soft delete, activity audit.
+- **2.2 — Sales pipeline & opportunity management:** multi-pipeline, configurable stages, Kanban + table views, forecasting, stage-history audit.
+- **2.3 — Client 360 workspace** *(narrow pull-forward from Phase 3 — workspace/record only; portal invitation, onboarding, and client-facing access remain Phase 3 scope, unchanged)*.
+- **2.4 — Service catalogue & pricing:** products/services/packages, minor-unit money, historical price snapshots.
+- **2.5 — Proposals & quotations:** builder, versioning, secure public links, AI-assisted drafting (no invented prices/terms).
+- **2.6 — Contracts & e-signature:** templates, versioning, signing, provider abstraction (no compliance/certification claims).
+- **2.7 — Payments & lead-to-client conversion** *(narrow pull-forward from Phase 3 — creates the `Client` record on conversion; portal/onboarding still Phase 3)*: Stripe test-mode, webhook idempotency, configurable conversion gating (contract and/or payment required), Stripe Connect assessed for tenant fund collection.
+- **2.8 — AI sales intelligence** *(narrow pull-forward from Phase 9/11 — sales-context only, not the full AI workforce)*: provider-agnostic lead scoring (explainable, no protected characteristics), next-best-action, pgvector-backed tenant-isolated AI client memory (first real use of the extension enabled in Phase 1.1).
+
+**Acceptance criteria (unchanged from the original Phase 2):** steps 4–9 of the vertical slice work end-to-end in a staging environment with a real (test-mode) Stripe payment and a real e-sign completion — now achieved across 2.1–2.7, with 2.8 as an enhancement layer on top.
+
+Competitive research for this phase: `docs/COMPETITIVE_ANALYSIS.md` (CRM/sales-category-specific; supplements, doesn't replace, the broader `docs/COMPETITOR_ANALYSIS.md` from Phase 0).
+
+### Phase 3 — Client Portal + Onboarding
+Scope: narrowed from the original (Client record creation and basic AI Memory moved into Phase 2.3/2.7 above) to what's left: white-label portal shell with invitation flow, one onboarding checklist template, and deepening AI Client Memory beyond the Phase 2.8 foundation.
 **Acceptance criteria:** steps 10–11 work end-to-end; a client user can log into their portal and see only their own org/client-scoped data (verified by isolation test); internal-only fields (cost/notes) are absent from the portal API response, not just hidden in UI.
 
 ### Phase 4 — Projects + Service Requests + Time + Invoicing

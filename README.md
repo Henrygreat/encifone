@@ -21,7 +21,8 @@ EncifOne unifies CRM, proposals/contracts, client portals, project & service del
 |---|---|
 | [`CLAUDE.md`](./CLAUDE.md) | Working agreement for AI coding sessions in this repo |
 | [`docs/PRODUCT_REQUIREMENTS.md`](./docs/PRODUCT_REQUIREMENTS.md) | Vision, personas, functional & non-functional requirements |
-| [`docs/COMPETITOR_ANALYSIS.md`](./docs/COMPETITOR_ANALYSIS.md) | Feature matrix, gaps, differentiation strategy |
+| [`docs/COMPETITOR_ANALYSIS.md`](./docs/COMPETITOR_ANALYSIS.md) | Feature matrix, gaps, differentiation strategy (Phase 0, full category) |
+| [`docs/COMPETITIVE_ANALYSIS.md`](./docs/COMPETITIVE_ANALYSIS.md) | CRM/sales-category-specific competitor research (Phase 2) |
 | [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) | System architecture, module boundaries, API design |
 | [`docs/DATABASE_SCHEMA.md`](./docs/DATABASE_SCHEMA.md) | Domain model / ERD, tenancy & indexing rules |
 | [`docs/AI_ARCHITECTURE.md`](./docs/AI_ARCHITECTURE.md) | Provider-agnostic AI service, agent framework, autonomy levels |

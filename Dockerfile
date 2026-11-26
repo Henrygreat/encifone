@@ -27,11 +27,25 @@ RUN pnpm db:generate && pnpm build
 FROM base AS app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
+# Docker sets HOSTNAME to the container's own id/hostname in every
+# container. Next's standalone server.js reads HOSTNAME and binds to it if
+# set, so without this override it binds to the container's assigned IP
+# instead of all interfaces — reachable via Docker's host port-publishing
+# NAT (which targets the container IP directly) but NOT via loopback from
+# inside the container itself, which breaks this image's own HEALTHCHECK
+# below and could break a reverse proxy that connects to the container's
+# internal IP on a shared Docker network (e.g. Coolify/Traefik).
+ENV HOSTNAME=0.0.0.0
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/prisma ./prisma
 EXPOSE 3000
+# Uses Node's built-in fetch (no curl/wget in the alpine base) so Coolify/
+# Docker can see this specific container's real health, independent of
+# whatever health status the separately-provisioned database reports.
+HEALTHCHECK --interval=10s --timeout=5s --start-period=15s --retries=3 \
+  CMD ["node", "-e", "fetch('http://localhost:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
 CMD ["node", "server.js"]
 
 # --- Runtime: background worker ---
