@@ -17,7 +17,10 @@ export function LeadSourceChart({ data }: { data: { source: string; count: numbe
         <Tooltip
           contentStyle={{ background: "var(--card)", borderColor: "var(--border)", borderRadius: 8 }}
           labelStyle={{ color: "var(--foreground)" }}
-          formatter={(value: number) => [`${value} lead${value === 1 ? "" : "s"}`, "Count"]}
+          formatter={(value) => {
+            const count = typeof value === "number" ? value : Number(value);
+            return [`${count} lead${count === 1 ? "" : "s"}`, "Count"];
+          }}
         />
         <Bar dataKey="count" fill="var(--module-crm)" radius={[0, 4, 4, 0]} name="Leads" />
       </BarChart>
