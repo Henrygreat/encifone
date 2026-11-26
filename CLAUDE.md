@@ -22,6 +22,7 @@ Branding (product name, taglines) is centralised in `src/config/branding.ts` —
 10. **Preserve existing working functionality.** A new phase extends the product; it does not regress a previously-working flow. If a change must break something, say so explicitly and get confirmation first.
 11. **Maintain a premium, modern enterprise UI.** Follow `docs/DESIGN_SYSTEM.md` — no generic admin-template look, no unstyled fallback states shipped as "done."
 12. **Database standard: PostgreSQL 18 + pgvector, everywhere.** Locally: `pgvector/pgvector:pg18` via `docker-compose.local.yml`. Production: a separately-provisioned Coolify-managed PostgreSQL 18 + pgvector instance — this repo's compose files never define a production Postgres container. See `docs/DECISION_LOG.md`. Never mount an older major version's data directory/volume into a newer Postgres major-version image (PG18's images changed `PGDATA`/`VOLUME` to `/var/lib/postgresql/18/docker` and `/var/lib/postgresql` respectively — see `docs/DEPLOYMENT.md` §3) — always back up, restore into a new volume, and validate before retiring the old one.
+13. **Never modify a previously-applied Prisma migration file, for any reason — not even a comment, formatting, or a stale documentation reference.** Prisma checksums the file content; any change (including a doc-link rename sweep) breaks that checksum and its only CLI-native resolution is `prisma migrate reset`, which wipes the database — forbidden by rule 9 without explicit approval for that specific action. If a migration file is found to contain an inaccuracy, leave it as-is (migration files are an immutable historical record, not living documentation) — note the correction in `docs/DECISION_LOG.md` instead. **Every future schema change goes into a new migration file; applied ones are never edited.** When doing a repo-wide text rename/sweep, explicitly exclude `prisma/migrations/**` first.
 
 ## How to work a task
 
@@ -32,15 +33,15 @@ Branding (product name, taglines) is centralised in `src/config/branding.ts` —
 5. Prefer editing/extending existing modules over new abstractions. Three similar call sites beat a premature shared helper.
 6. Commit completed, tested work with a descriptive message; push completed milestones to GitHub per the workflow below. Don't leave a finished phase uncommitted.
 
-## Git workflow
+## Git workflow (master-first, adopted 2026-11-26 — see `docs/DECISION_LOG.md`)
 
-- **`main`** — stable, production-ready releases only. Every commit on `main` should be deployable.
-- **`develop`** — ongoing integration branch for active development.
-- **`feature/<name>`** — individual features, branched from `develop`, merged back via PR.
-- **`hotfix/<name>`** — urgent production fixes, branched from `main`, merged into both `main` and `develop`.
-- **Never merge untested changes into `main`.** Lint, typecheck, tests, and build must pass first (CI enforces this — see `.github/workflows/`).
+- **`master` is the single source of truth: the only long-lived branch, both for ongoing development and for production.** Every commit on `master` must pass CI (lint, typecheck, `prisma validate`, Compose config validation, security audit, tests, migration integrity, build, Docker multi-network test, Docker smoke test — `.github/workflows/ci.yml`) before it lands, and a push to `master` that passes every required job triggers production deployment via a CI-gated Coolify webhook (see `docs/DEPLOYMENT.md` §5 and `docs/DEPLOYMENT_RUNBOOK.md`).
+- Commit directly to `master` for routine, low-risk work once it passes CI locally (lint/typecheck/build/tests — see `docs/TESTING.md` §4). For a higher-risk or longer-running change (a schema migration, an infrastructure change, a multi-day feature), use a short-lived `feature/<name>` or `fix/<name>` branch off `master`, open a PR so CI validates it, then merge back into `master` and delete the branch promptly — it is not a parking lot for ongoing work.
+- **Do not create `develop` or `main` branches for future phases.** Both exist from earlier phases of this project and are kept, not deleted, as historical references (see `docs/DECISION_LOG.md`) — no new work targets them, and nothing is merged into them going forward.
+- **Never automatically merge incomplete work into `master`.** CI must pass first — never bypass or disable a required check to force a merge.
 - Tag production-ready milestones with semver (`v0.1.0`, `v0.2.0`, ...) once their acceptance criteria are met.
-- Never force-push to `main` or `develop`, and never rewrite published history there.
+- Never force-push to `master`, and never delete or rewrite its published history.
+- Coolify's own "deploy on push" trigger for the production resource must be **disabled** — only the CI-gated webhook deploys, so a push to `master` never triggers two independent, racing deployments. See `docs/DEPLOYMENT_RUNBOOK.md` §1.2.
 
 ## Repo conventions
 

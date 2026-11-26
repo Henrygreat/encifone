@@ -1,0 +1,17 @@
+# Prisma migration files are checksummed by exact file content (including
+# line endings) the moment they're applied. This repo's local git config
+# commonly has core.autocrlf=true, which otherwise silently rewrites LF to
+# CRLF on every checkout/branch-switch — causing the exact checksum-mismatch
+# incident recorded in docs/DECISION_LOG.md, twice. Force LF, unconditionally,
+# for every migration file, overriding any user-level autocrlf setting.
+prisma/migrations/**/*.sql text eol=lf
+
+# Reasonable repo-wide defaults so this class of bug doesn't resurface
+# elsewhere. Avoid touching binary-ish or generated files.
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.ico binary
+*.woff binary
+*.woff2 binary

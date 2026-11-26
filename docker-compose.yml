@@ -6,6 +6,18 @@ name: clientos-ai
 # Redis publishes no host port here, so it's reachable only from the other
 # containers on this compose network, never from the public internet.
 #
+# Every variable each service needs is listed EXPLICITLY below via `${VAR}`
+# interpolation — deliberately not via `env_file:`. Coolify's Docker Compose
+# env-var handling has a documented history of `env_file` entries being
+# auto-injected/overridden/rescoped in ways that can silently drop a
+# variable for one service but not another (see docs/DEPLOYMENT.md §4 and
+# docs/DECISION_LOG.md) — that failure class matched exactly what this repo
+# saw in an earlier deployment attempt. `${VAR}` interpolation reads from
+# whatever Coolify (or local `.env`) puts in the project directory's `.env`
+# for compose itself — not from a container's own `env_file:` — which is
+# the one mechanism Coolify's own docs describe as always working the same
+# way in every version.
+#
 # For local development, run with the local override added:
 #   docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build
 # (or `pnpm docker:local` — see package.json), which adds a local
@@ -22,33 +34,69 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+    deploy:
+      resources:
+        # Conservative starting point for a modest VPS (docs/MASTER_ROADMAP.md
+        # §5) — tune based on actual usage, not a hard requirement.
+        limits: { cpus: "0.50", memory: 256M }
 
   migrate:
     build:
       context: .
       target: deps
-    env_file:
-      - path: .env
-        required: false
+      args:
+        # Set GIT_SHA as an env var wherever `docker compose build` runs
+        # (Coolify or CI) to have it picked up here automatically — falls
+        # back to "unknown" otherwise. See docs/ROLLBACK.md.
+        GIT_SHA: ${GIT_SHA:-unknown}
     environment:
+      # Only what `prisma migrate deploy` actually reads — nothing else.
       DATABASE_URL: ${DATABASE_URL}
-      REDIS_URL:  ${REDIS_URL}
     command: ["node_modules/.bin/prisma", "migrate", "deploy"]
     restart: "no"
+    deploy:
+      resources:
+        limits: { cpus: "0.50", memory: 512M }
 
   app:
     build:
       context: .
       target: app
+      args:
+        GIT_SHA: ${GIT_SHA:-unknown}
     restart: unless-stopped
-    env_file:
-      - path: .env
-        required: false
+    deploy:
+      resources:
+        limits: { cpus: "1.00", memory: 1024M }
     environment:
+      NODE_ENV: production
+      # Belt-and-suspenders alongside the Dockerfile's own ENV — see
+      # docs/DECISION_LOG.md for the production incident this fixes.
+      HOSTNAME: "0.0.0.0"
+      PORT: ${PORT:-3000}
       DATABASE_URL: ${DATABASE_URL}
-      REDIS_URL: redis://redis:6379  # internal service name, constant across environments
-    ports:
-      - "3000:3000"
+      REDIS_URL: redis://redis:6379 # internal service name, constant across environments — never from ambient env
+      AUTH_SECRET: ${AUTH_SECRET}
+      APP_URL: ${APP_URL}
+      # Deliberately NOT set here even with a `:-` fallback — Compose would
+      # still inject the key with an empty string when unset, which fails
+      # our env schema's z.string().url() validation (empty string isn't
+      # "unset" to Zod). src/lib/env.ts's ensureNextAuthUrl() defaults it
+      # from APP_URL in code instead. Only uncomment/set this if NEXTAUTH_URL
+      # must genuinely differ from APP_URL.
+      # NEXTAUTH_URL: ${NEXTAUTH_URL}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+    # No host port published here, deliberately — see docs/ROLLBACK.md and
+    # docs/DEPLOYMENT.md §5. Traefik reaches this container over Coolify's
+    # own Docker network by container name/port, not via a published host
+    # port (confirmed: the production incident this project hit showed
+    # Traefik already routing that way). Coolify's own docs state
+    # zero-downtime blue-green deploys/rollbacks require a health check
+    # (this image has one) AND no port mapping — with one published, a
+    # new container can't bind the same host port until the old one is
+    # removed first, forcing a brief gap instead of a clean cutover. Local
+    # dev still gets host access via docker-compose.local.yml's override.
     depends_on:
       redis:
         condition: service_healthy
@@ -59,13 +107,22 @@ services:
     build:
       context: .
       target: worker
+      args:
+        GIT_SHA: ${GIT_SHA:-unknown}
     restart: unless-stopped
-    env_file:
-      - path: .env
-        required: false
+    deploy:
+      resources:
+        limits: { cpus: "0.50", memory: 512M }
     environment:
       DATABASE_URL: ${DATABASE_URL}
-      REDIS_URL: redis://redis:6379  # internal service name, constant across environments
+      REDIS_URL: redis://redis:6379 # internal service name, constant across environments — never from ambient env
+      # The worker doesn't use AUTH_SECRET/APP_URL, but it imports the same
+      # shared src/lib/env.ts module as the app (for REDIS_URL), which
+      # eagerly validates the WHOLE env schema on import — so these two
+      # must be present here too, or the worker crashes on startup. See
+      # docs/DEPLOYMENT.md §4 and docs/DECISION_LOG.md.
+      AUTH_SECRET: ${AUTH_SECRET}
+      APP_URL: ${APP_URL}
     depends_on:
       redis:
         condition: service_healthy
