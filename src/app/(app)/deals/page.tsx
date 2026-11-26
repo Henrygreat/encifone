@@ -41,6 +41,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { formatMoneyMinor } from "@/lib/money";
 
 interface Stage {
   id: string;
@@ -70,14 +71,6 @@ interface OpportunityRow {
 }
 
 type Board = Record<string, OpportunityRow[]>;
-
-function formatMoney(valueMinor: number | null, currency: string): string {
-  if (valueMinor === null) return "—";
-  // Minor-unit integer -> major-unit display, never float arithmetic on the
-  // stored value itself (CLAUDE.md rule 3) — Intl.NumberFormat divides for
-  // display only, the integer is what's persisted and transmitted.
-  return new Intl.NumberFormat(undefined, { style: "currency", currency }).format(valueMinor / 100);
-}
 
 function initialsFor(name: string | null, email: string) {
   const source = name ?? email;
@@ -131,7 +124,7 @@ function DealCard({ opportunity }: { opportunity: OpportunityRow }) {
       {opportunity.company && <span className="text-xs text-muted-foreground">{opportunity.company.name}</span>}
       <div className="flex items-center justify-between">
         <span className="font-semibold text-foreground">
-          {formatMoney(opportunity.valueMinor, opportunity.currency)}
+          {formatMoneyMinor(opportunity.valueMinor, opportunity.currency)}
         </span>
         {opportunity.owner && (
           <Avatar size="sm">
@@ -172,7 +165,7 @@ function StageColumn({ stage, opportunities }: { stage: Stage; opportunities: Op
           <h3 className="text-sm font-semibold text-foreground">{stage.name}</h3>
           <span className="text-xs text-muted-foreground">{opportunities.length}</span>
         </div>
-        <span className="text-xs text-muted-foreground">{formatMoney(totalValue, "GBP")}</span>
+        <span className="text-xs text-muted-foreground">{formatMoneyMinor(totalValue, "GBP")}</span>
       </div>
       <SortableContext items={opportunities.map((o) => o.id)} strategy={verticalListSortingStrategy}>
         <div
