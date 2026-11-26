@@ -25,19 +25,20 @@ This is the Phase 0 entity inventory and relationship map — not a requirement 
 
 ## 3. CRM
 
-- **Company** — supports parent/subsidiary via `parentCompanyId` self-relation.
-- **Contact** — belongs to `Company` (optional), owner (`Membership`), lifecycle stage, consent fields.
-- **Lead** — pre-qualification record; converts into `Contact`/`Company`/`Opportunity`.
-- **CustomField** / **CustomFieldValue** — polymorphic custom fields per object type; **CustomObject** for fully custom entities (Phase 2+).
-- **Tag**, **Segment** — many-to-many labelling.
-- **LeadScore** — factor breakdown + weights + resulting score, linked to `Lead`/`Contact` (explainability requirement).
+- **Company** — supports parent/subsidiary via `parentCompanyId` self-relation. *(Implemented, Phase 2.1.)*
+- **Contact** — belongs to `Company` (optional), owner (`Membership`), lifecycle stage, consent fields. *(Implemented, Phase 2.1.)*
+- **Lead** — pre-qualification record; converts into `Contact`/`Company`/`Opportunity`. *(Implemented, Phase 2.1.)*
+- **CustomField** / **CustomFieldValue** — polymorphic custom fields per object type (`CustomFieldEntityType`); **CustomObject** for fully custom entities (Phase 2+, not yet built). *(CustomField/CustomFieldValue implemented, Phase 2.1.)*
+- **Tag**, **Segment** — many-to-many labelling. *(Not yet built — `Company`/`Contact`/`Lead`/`Opportunity` currently each carry a simple `tags: String[]` column instead, sufficient for Phase 2A's scope; revisit a relational `Tag`/`Segment` model only if cross-object tag reporting is needed.)*
+- **LeadScore** — factor breakdown + weights + resulting score, linked to `Lead`/`Contact` (explainability requirement). *(Not yet built — `Lead.score` is a schema-only placeholder column; real scoring is Phase 2.8.)*
+- **Activity** — added 2026-11-26 (Phase 2A, migration `20261126182829_sales_pipeline_and_activities`). One polymorphic model for calls, meetings, emails, notes, follow-up tasks, and reminders (`ActivityType`), rather than a separate `Activity` + `Task` pair — they share the same shape (owner, optional due date, completion state), and every "unified timeline" requirement needs them queried together per entity anyway. `entityType`/`entityId` (`ActivityEntityType`: `COMPANY`/`CONTACT`/`LEAD`/`OPPORTUNITY`) follow the same polymorphic pattern as `CustomFieldValue` — resolved against `entityType` in the service layer, never a database-enforced foreign key. A logged call/meeting/email/note is created `COMPLETED` with no `dueAt`; a task/reminder is created `OPEN` with a `dueAt`. Optionally also tagged against an `Opportunity` via `opportunityId` even when its primary entity is a `Contact`/`Company`.
 
 ## 4. Sales
 
-- **Pipeline** / **PipelineStage** — org-defined, multiple pipelines.
-- **Opportunity** — value, probability, stage, expected close, loss reason, linked `Contact`/`Company`.
-- **Proposal** — versioned document; **ProposalLine** for pricing/options.
-- **Contract** / **ContractVersion** — versioned legal documents; **Signature** (evidence: signer, IP, timestamp, method).
+- **Pipeline** / **PipelineStage** — org-defined, multiple pipelines. *(Implemented 2026-11-26, Phase 2A.)* `PipelineStage.probability` is the stage's default forecasting weight (0-100); an individual `Opportunity` can override it.
+- **Opportunity** — value (`valueMinor`, minor-unit integer per CLAUDE.md rule 3), probability, stage, expected close, won/lost reason, linked `Contact`/`Company`/owning `Membership`; `position` persists Kanban drag-order within a stage. *(Implemented 2026-11-26, Phase 2A.)* `OpportunityStageHistory` is the stage-move audit trail — same rationale as `LeadOwnershipHistory`: structured from/to querying ("time in each stage") that `AuditLog`'s free-form metadata isn't indexed for.
+- **Proposal** — versioned document; **ProposalLine** for pricing/options. *(Not yet built — Phase 2.5.)*
+- **Contract** / **ContractVersion** — versioned legal documents; **Signature** (evidence: signer, IP, timestamp, method). *(Not yet built — Phase 2.6.)*
 
 ## 5. Clients
 

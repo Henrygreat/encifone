@@ -148,9 +148,9 @@ These cannot be confirmed from this working environment; `docs/DEPLOYMENT.md` §
 - GitHub branch protection rules and Coolify's deploy-trigger scope (both require manual platform configuration).
 - Whether `GIT_SHA` is actually wired into Coolify's build environment from the commit it deploys.
 
-## Master-first Git workflow consolidation (2026-11-26, awaiting approval to merge)
+## Master-first Git workflow consolidation (2026-11-26, approved and merged into `master`)
 
-Full record: `docs/DECISION_LOG.md`. Branch: `integration/master-consolidation`, created from `master`. **Not merged into `master`, no default-branch change, no branches deleted, no Coolify deployment triggered, no production data touched — awaiting explicit approval**, per instruction.
+Full record: `docs/DECISION_LOG.md`. Built on `integration/master-consolidation` (created from `master`), then merged into `master` (`--no-ff`, no force-push) once approved. **No default-branch change, no branches deleted, no Coolify deployment triggered, no production data touched** — those remain blocked on manual GitHub/Coolify configuration only the user can perform (see below).
 
 ### What this consolidated
 - `develop`, `feature/phase-1.5-infra-hardening`, and `feature/phase-2.1-crm` merged into `integration/master-consolidation` (three merge commits; one conflict, in `docs/DECISION_LOG.md`, resolved by keeping all three entries). `main` confirmed to carry no unique commits beyond what `master` already has.
@@ -173,6 +173,23 @@ A `deploy` job in `.github/workflows/ci.yml`: runs only on a direct push to `mas
 ### Status update (2026-11-26, approved)
 **Merged into `master`** (merge commit, `--no-ff`, no force-push; backup tag `backup/master-pre-consolidation-20261126` on master's pre-merge tip). Still explicitly NOT done: the GitHub default branch has not been changed (requires repo-admin permissions this session doesn't have — manual steps provided to the user), no branch has been deleted, no Coolify deployment has been triggered (real or test — blocked on live Coolify credentials this session doesn't have), no production database has been touched, and no CI check was ever bypassed, disabled, or weakened — every failure found was root-caused and fixed in the check itself.
 
+## Phase 2A — CRM & Sales Core + Premium UI/UX (reconciled 2026-11-26, Milestone A complete)
+
+Full record: `docs/DECISION_LOG.md`. See `docs/MASTER_ROADMAP.md` "Phase 2A" for the reconciliation of Phase 2.1 + 2.2 + a new Activities module into one combined build, across 5 milestones (A–E).
+
+### Milestone A — Audit and design foundation (complete)
+- **Audit:** confirmed Phase 2.1's CRM schema (`Company`/`Contact`/`Lead`/`CustomFieldDefinition`/`CustomFieldValue`) existed with zero service layer, API, or UI — matching what was reported, verified against the actual repository rather than assumed.
+- **Schema:** new migration `20261126182829_sales_pipeline_and_activities` — `Pipeline`/`PipelineStage`/`Opportunity`/`OpportunityStageHistory`/`Activity` + 5 enums. Purely additive; checksum recorded in `prisma/migrations/checksums.json`. See `docs/DATABASE_SCHEMA.md` §3–4 for the full model rationale.
+- **Design system v2:** new palette + per-module accent tokens in `src/app/globals.css`; two tokens deepened one shade from their named swatch for WCAG AA contrast (checked by calculation — see `docs/DESIGN_SYSTEM.md` §2). Documented in full in `docs/DESIGN_SYSTEM.md`.
+- **Navigation redesigned:** `src/components/app-shell/nav-config.ts`/`sidebar.tsx` — 6 groups (Overview/CRM/Sales/Work management/Intelligence/Administration), every planned item preserved with a Lucide icon; `/contacts`, `/companies`, `/leads`, `/deals` routes wired ahead of their UI (Milestone B/C).
+- **Reusable Bento primitives:** `src/components/bento/bento-grid.tsx` (`BentoGrid`/`BentoCard`/`BentoEmptyState`) — structural layer, no dashboard data wiring yet (Milestone D).
+- **React Three Fiber architecture:** `src/components/three/` — `useWebGLSupport`/`usePrefersReducedMotion` (`useSyncExternalStore`), `SceneErrorBoundary`, `SceneCanvas` (DPR-capped, fallback-first). Dependency compatibility (`@react-three/fiber@9.8.2`, `three@0.187.0`, `@react-three/drei@10.7.9` against React 19.3.0/Next 16.4.6) verified against the npm registry directly before installing, not assumed. No creative scene content yet (Milestone D). `@dnd-kit/core@6.3.1`/`sortable@10.0.0`/`utilities@3.2.2` also installed for Milestone C's Kanban board.
+- **New shadcn primitives:** `tabs`, `popover`, `checkbox`, `switch`, `progress`, `alert`, `scroll-area`, `calendar`.
+- **Validated:** lint, typecheck, `prisma validate`, migration-integrity, local production build all pass clean.
+
+### Not yet started
+Milestones B (CRM services/API/UI for contacts/companies/leads), C (pipeline/Kanban/activities), D (real-data Bento dashboard, landing-page 3D hero, dashboard AI-orb widget, auth-page visuals), E (full QA pass, `docs/CRM_USER_GUIDE.md`, final docs sweep).
+
 ## Known limitations
 
 - **No email delivery.** Invite links must be shared manually. This blocks any real multi-user onboarding until an email provider (Resend/Postmark) is wired up — planned alongside Phase 2's proposal/contract flows.
@@ -186,4 +203,4 @@ A `deploy` job in `.github/workflows/ci.yml`: runs only on a direct push to `mas
 
 ## Recommended next step
 
-**Superseded by the master-first consolidation above:** Phase 1.5 and Phase 2.1's CRM foundation (schema + first migration) have since been merged into `master` (approved 2026-11-26 — see `docs/DECISION_LOG.md`). Remaining before resuming Phase 2.1 CRM feature work: the live-Coolify-environment items still pending in that section (GitHub default branch, Coolify webhook/secrets configuration, production verification) — see the "Master-first Git workflow consolidation" section above for exactly what's done vs. blocked on the user.
+Phase 2A Milestone A (design foundation) is complete — see that section above. Next: Milestone B — CRM domain services (`src/modules/crm/`), authorization-checked API routes, and real UI for contacts/companies (list, profile, create/edit, search/filter/pagination), following the existing `src/modules/identity/` pattern. Separately, live Coolify/GitHub configuration (default branch, deploy webhook secrets, production verification) remains blocked on the user per the "Master-first Git workflow consolidation" section above — independent of Phase 2A, doesn't block UI/CRM work from continuing.

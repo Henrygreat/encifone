@@ -91,6 +91,9 @@ model Organisation {
   leads         Lead[]
   customFields  CustomFieldDefinition[]
   customValues  CustomFieldValue[]
+  pipelines     Pipeline[]
+  opportunities Opportunity[]
+  activities    Activity[]
 }
 
 enum MembershipRole {
@@ -134,9 +137,11 @@ model Membership {
   user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
 
-  ownedCompanies Company[] @relation("CompanyOwner")
-  ownedContacts  Contact[] @relation("ContactOwner")
-  ownedLeads     Lead[]    @relation("LeadOwner")
+  ownedCompanies     Company[]     @relation("CompanyOwner")
+  ownedContacts      Contact[]     @relation("ContactOwner")
+  ownedLeads         Lead[]        @relation("LeadOwner")
+  ownedOpportunities Opportunity[] @relation("OpportunityOwner")
+  ownedActivities    Activity[]    @relation("ActivityOwner")
 
   @@unique([userId, organisationId])
   @@index([organisationId, status])
@@ -222,6 +227,7 @@ model Company {
   subsidiaries   Company[]    @relation("CompanyHierarchy")
   contacts       Contact[]
   leads          Lead[]
+  opportunities  Opportunity[]
 
   @@index([organisationId, status])
   @@index([organisationId, name])
@@ -255,9 +261,10 @@ model Contact {
   deletedAt                 DateTime?
 
   organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
-  company      Company?     @relation(fields: [companyId], references: [id], onDelete: SetNull)
-  owner        Membership?  @relation("ContactOwner", fields: [ownerId], references: [id], onDelete: SetNull)
-  leads        Lead[]
+  company       Company?      @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  owner         Membership?   @relation("ContactOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  leads         Lead[]
+  opportunities Opportunity[]
 
   @@index([organisationId, status])
   @@index([organisationId, companyId])
@@ -388,4 +395,176 @@ model CustomFieldValue {
 
   @@unique([fieldId, entityId])
   @@index([organisationId, entityType, entityId])
+}
+
+// --- Sales pipeline (Phase 2A — reconciled Phase 2.2, see docs/DECISION_LOG.md) ---
+// See docs/MASTER_ROADMAP.md "Phase 2A" and docs/DATABASE_SCHEMA.md §4 (Sales).
+
+model Pipeline {
+  id             String   @id @default(cuid())
+  organisationId String
+  name           String
+  isDefault      Boolean  @default(false)
+  position       Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organisation  Organisation    @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  stages        PipelineStage[]
+  opportunities Opportunity[]
+
+  @@index([organisationId, position])
+}
+
+model PipelineStage {
+  id         String   @id @default(cuid())
+  pipelineId String
+  name       String
+  position   Int      @default(0)
+  // Default forecasting weight (0-100) for opportunities in this stage that
+  // don't set their own override — see Opportunity.probability.
+  probability Int     @default(0)
+  isWon      Boolean  @default(false)
+  isLost     Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  pipeline      Pipeline      @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+  opportunities Opportunity[]
+
+  @@index([pipelineId, position])
+}
+
+enum OpportunityStatus {
+  OPEN
+  WON
+  LOST
+}
+
+model Opportunity {
+  id                String            @id @default(cuid())
+  organisationId    String
+  pipelineId        String
+  stageId           String
+  name              String
+  companyId         String?
+  contactId         String?
+  ownerId           String?
+  valueMinor        Int?
+  currency          String            @default("GBP")
+  // Per-opportunity override; falls back to PipelineStage.probability for
+  // weighted forecasting when unset.
+  probability       Int?
+  expectedCloseDate DateTime?
+  status            OpportunityStatus @default(OPEN)
+  wonAt             DateTime?
+  lostAt            DateTime?
+  wonReason         String?
+  lostReason        String?
+  // Ordering within a Kanban column — persisted so drag-and-drop reorders
+  // survive a reload, not just the stage move itself.
+  position          Int               @default(0)
+  tags              String[]          @default([])
+  notes             String?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  deletedAt         DateTime?
+
+  organisation Organisation              @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  pipeline     Pipeline                  @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+  stage        PipelineStage             @relation(fields: [stageId], references: [id], onDelete: Restrict)
+  company      Company?                  @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  contact      Contact?                  @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  owner        Membership?               @relation("OpportunityOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  stageHistory OpportunityStageHistory[]
+  activities   Activity[]
+
+  @@index([organisationId, status])
+  @@index([organisationId, pipelineId, stageId, position])
+  @@index([organisationId, ownerId])
+  @@index([organisationId, deletedAt])
+}
+
+// Stage-move audit trail — same rationale as LeadOwnershipHistory: structured
+// from/to querying ("time in each stage") that AuditLog's free-form metadata
+// isn't indexed for.
+model OpportunityStageHistory {
+  id            String   @id @default(cuid())
+  opportunityId String
+  fromStageId   String?
+  toStageId     String?
+  changedAt     DateTime @default(now())
+
+  opportunity Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+
+  @@index([opportunityId, changedAt])
+}
+
+// --- Activities & tasks (Phase 2A addition — not previously in docs/DATABASE_SCHEMA.md) ---
+// Deliberately one polymorphic model for calls/meetings/emails/notes/tasks/
+// reminders rather than separate Activity + Task tables: they share the same
+// shape (type, optional due date, owner, completion state) and every "unified
+// timeline" requirement in docs/MASTER_ROADMAP.md needs them queried
+// together per entity anyway. A logged call/meeting/email/note is simply
+// created with status COMPLETED and no dueAt; a task/reminder is created
+// OPEN with a dueAt. See docs/DECISION_LOG.md and docs/DATABASE_SCHEMA.md §3.
+// entityType/entityId follow the same polymorphic pattern as
+// CustomFieldValue — resolved against entityType in the service layer, never
+// a database-enforced foreign key.
+
+enum ActivityEntityType {
+  COMPANY
+  CONTACT
+  LEAD
+  OPPORTUNITY
+}
+
+enum ActivityType {
+  CALL
+  MEETING
+  EMAIL
+  NOTE
+  TASK
+}
+
+enum ActivityPriority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum ActivityStatus {
+  OPEN
+  COMPLETED
+  CANCELLED
+}
+
+model Activity {
+  id              String             @id @default(cuid())
+  organisationId  String
+  entityType      ActivityEntityType
+  entityId        String
+  type            ActivityType
+  subject         String
+  body            String?
+  dueAt           DateTime?
+  priority        ActivityPriority   @default(MEDIUM)
+  status          ActivityStatus     @default(OPEN)
+  completedAt     DateTime?
+  ownerId         String?
+  createdByUserId String?
+  // Optional: tag an activity against the deal it relates to even when the
+  // activity's primary entity (entityType/entityId) is a Contact/Company.
+  opportunityId   String?
+  metadata        Json?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  owner        Membership?  @relation("ActivityOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  opportunity  Opportunity? @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+
+  @@index([organisationId, entityType, entityId])
+  @@index([organisationId, ownerId, status])
+  @@index([organisationId, dueAt])
 }

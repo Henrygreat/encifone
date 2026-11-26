@@ -41,6 +41,15 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
+  /* Module accent tokens — see docs/DESIGN_SYSTEM.md §3. One distinct accent
+     per top-level nav group, used for icon tint, active-state highlight,
+     and chart series belonging to that module. */
+  --color-module-overview: var(--module-overview);
+  --color-module-crm: var(--module-crm);
+  --color-module-sales: var(--module-sales);
+  --color-module-work: var(--module-work);
+  --color-module-intelligence: var(--module-intelligence);
+  --color-module-admin: var(--module-admin);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -51,79 +60,98 @@
 }
 
 :root {
-  /* ClientOS AI brand tokens — see docs/DESIGN_SYSTEM.md. Tenant/platform overridable. */
+  /* EncifOne brand tokens — see docs/DESIGN_SYSTEM.md. Tenant/platform
+     overridable via Organisation.branding. Base palette: Indigo/Violet
+     primary family, Midnight Navy ink, Electric Blue/Emerald/Cyan/Amber/Rose
+     as module accents and semantic states. */
   --card: #ffffff;
-  --card-foreground: #0f172a;
+  --card-foreground: #0b1020;
   --popover: #ffffff;
-  --popover-foreground: #0f172a;
-  --primary: #2563eb;
-  --primary-foreground: #f8fafc;
-  --secondary: #f1f5f9;
-  --secondary-foreground: #0f172a;
-  --muted: #f1f5f9;
-  --muted-foreground: #64748b;
-  --accent: #eff6ff;
-  --accent-foreground: #0f172a;
-  --destructive: #dc2626;
+  --popover-foreground: #0b1020;
+  /* Deepened one step from the raw Indigo/Rose module-accent hexes below —
+     #6366f1/#f43f5e on white text measure ~4.5:1/~3.7:1, short of WCAG AA's
+     4.5:1 for normal text. These two shades (Tailwind indigo-600/rose-600
+     neighbours) measure ~6.3:1/~4.7:1 and are what text actually renders on. */
+  --primary: #4f46e5;
+  --primary-foreground: #ffffff;
+  --secondary: #eef0fb;
+  --secondary-foreground: #0b1020;
+  --muted: #eef1f8;
+  --muted-foreground: #5b6478;
+  --accent: #eef0fb;
+  --accent-foreground: #0b1020;
+  --destructive: #e11d48;
   --destructive-foreground: #ffffff;
-  --border: #e2e8f0;
-  --input: #e2e8f0;
-  --ring: #3b82f6;
-  --success: #16a34a;
-  --warning: #d97706;
-  --chart-1: #0f172a;
+  --border: #e3e6f0;
+  --input: #e3e6f0;
+  --ring: #6366f1;
+  --success: #10b981;
+  --warning: #f59e0b;
+  --chart-1: #6366f1;
   --chart-2: #2563eb;
-  --chart-3: #3b82f6;
+  --chart-3: #10b981;
   --chart-4: #06b6d4;
-  --chart-5: #67e8f9;
-  --radius: 0.625rem;
+  --chart-5: #f59e0b;
+  --radius: 0.75rem;
   --sidebar: #ffffff;
-  --sidebar-foreground: #0f172a;
-  --sidebar-primary: #2563eb;
-  --sidebar-primary-foreground: #f8fafc;
-  --sidebar-accent: #eff6ff;
-  --sidebar-accent-foreground: #0f172a;
-  --sidebar-border: #e2e8f0;
-  --sidebar-ring: #3b82f6;
-  --background: #f8fafc;
-  --foreground: #0f172a;
+  --sidebar-foreground: #0b1020;
+  --sidebar-primary: #4f46e5;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #eef0fb;
+  --sidebar-accent-foreground: #0b1020;
+  --sidebar-border: #e3e6f0;
+  --sidebar-ring: #6366f1;
+  --background: #f5f7fc;
+  --foreground: #0b1020;
+  --module-overview: #6366f1;
+  --module-crm: #f59e0b;
+  --module-sales: #10b981;
+  --module-work: #2563eb;
+  --module-intelligence: #8b5cf6;
+  --module-admin: #475569;
 }
 
 .dark {
-  --background: #0b1220;
-  --foreground: #f8fafc;
-  --card: #0f172a;
-  --card-foreground: #f8fafc;
-  --popover: #0f172a;
-  --popover-foreground: #f8fafc;
-  --primary: #3b82f6;
-  --primary-foreground: #0b1220;
-  --secondary: #1e293b;
-  --secondary-foreground: #f8fafc;
-  --muted: #1e293b;
-  --muted-foreground: #94a3b8;
-  --accent: #1e293b;
-  --accent-foreground: #f8fafc;
-  --destructive: #f87171;
-  --destructive-foreground: #0b1220;
-  --border: rgba(255, 255, 255, 0.08);
-  --input: rgba(255, 255, 255, 0.12);
-  --ring: #3b82f6;
-  --success: #22c55e;
-  --warning: #f59e0b;
-  --chart-1: #93c5fd;
-  --chart-2: #3b82f6;
-  --chart-3: #2563eb;
-  --chart-4: #06b6d4;
-  --chart-5: #0e7490;
-  --sidebar: #0f172a;
-  --sidebar-foreground: #f8fafc;
-  --sidebar-primary: #3b82f6;
-  --sidebar-primary-foreground: #0b1220;
-  --sidebar-accent: #1e293b;
-  --sidebar-accent-foreground: #f8fafc;
-  --sidebar-border: rgba(255, 255, 255, 0.08);
-  --sidebar-ring: #3b82f6;
+  --background: #0b1020;
+  --foreground: #f1f3fb;
+  --card: #111827;
+  --card-foreground: #f1f3fb;
+  --popover: #111827;
+  --popover-foreground: #f1f3fb;
+  --primary: #818cf8;
+  --primary-foreground: #0b1020;
+  --secondary: #1b2333;
+  --secondary-foreground: #f1f3fb;
+  --muted: #1b2333;
+  --muted-foreground: #9aa4bf;
+  --accent: #1b2333;
+  --accent-foreground: #f1f3fb;
+  --destructive: #fb7185;
+  --destructive-foreground: #0b1020;
+  --border: rgba(255, 255, 255, 0.09);
+  --input: rgba(255, 255, 255, 0.13);
+  --ring: #818cf8;
+  --success: #34d399;
+  --warning: #fbbf24;
+  --chart-1: #818cf8;
+  --chart-2: #60a5fa;
+  --chart-3: #34d399;
+  --chart-4: #22d3ee;
+  --chart-5: #fbbf24;
+  --sidebar: #111827;
+  --sidebar-foreground: #f1f3fb;
+  --sidebar-primary: #818cf8;
+  --sidebar-primary-foreground: #0b1020;
+  --sidebar-accent: #1b2333;
+  --sidebar-accent-foreground: #f1f3fb;
+  --sidebar-border: rgba(255, 255, 255, 0.09);
+  --sidebar-ring: #818cf8;
+  --module-overview: #818cf8;
+  --module-crm: #fbbf24;
+  --module-sales: #34d399;
+  --module-work: #60a5fa;
+  --module-intelligence: #a78bfa;
+  --module-admin: #94a3b8;
 }
 
 @layer base {
