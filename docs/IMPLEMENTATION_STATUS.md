@@ -7,7 +7,7 @@ _Last updated: 2026-11-26_
 ## GitHub integration & branding
 
 - **Repository:** https://github.com/Henrygreat/encifone — connected as `origin`. The remote was empty when connected (no pre-existing commits/branches), so the full local history was pushed directly; nothing was force-pushed or overwritten.
-- **Branching:** `main` (stable/production-ready, tagged releases) and `develop` (ongoing integration) both exist and track their remotes. `feature/*` and `hotfix/*` are the conventions for new work — see `CLAUDE.md` §"Git workflow".
+- **Branching (as of this 2026-11-25 pass — superseded 2026-11-26, see "Master-first Git workflow consolidation" below):** `main` (stable/production-ready, tagged releases) and `develop` (ongoing integration) both existed and tracked their remotes at this point; `feature/*` and `hotfix/*` were the conventions for new work. `CLAUDE.md` §"Git workflow" now describes the current master-first model, not this one.
 - **Tag `v0.1.0`** marks the Phase 1 foundation commit on `main` — its acceptance criteria (below) were verified before tagging.
 - **Rebrand:** "ClientOS AI" → **EncifOne**, centralised in `src/config/branding.ts` and propagated to page metadata, auth pages, the sidebar header, worker logs, and all documentation.
 - **Deliberately left unchanged** (to avoid data loss / unnecessary churn): the Docker Compose project name (`clientos-ai` — renaming it would create new Docker volumes and orphan the existing Postgres data directory), the Postgres role/database name (`clientos`) already initialised in that volume, the active-org cookie key (`clientos_active_org` — an internal, never user-visible identifier), and every Prisma model name and the existing migration folder/file. None of these are customer-facing branding.
@@ -104,9 +104,9 @@ Full record: `docs/DECISION_LOG.md` (2026-11-26 entry). Performed before any Pha
 - **Verified again post-hardening:** full local stack rebuild, `app` container `HEALTHCHECK` passes (confirmed bind address `0.0.0.0:3000` via `/proc/net/tcp`), worker starts cleanly, `/api/health` ok, lint/typecheck/tests (9/9) all pass.
 - **Phase 1 feature completeness reconfirmed** before starting Phase 2: all four Phase 1 acceptance criteria above still hold; nothing was found to have regressed.
 
-## Phase 1.5 — Production Infrastructure Hardening & Deployment Reliability (implementation complete on `feature/phase-1.5-infra-hardening`; live-environment items pending)
+## Phase 1.5 — Production Infrastructure Hardening & Deployment Reliability (implementation complete; merged into `master` 2026-11-26; live-environment items pending)
 
-Full record: `docs/DECISION_LOG.md` (2026-11-26 entries). Branch: `feature/phase-1.5-infra-hardening`, based on `develop` (kept separate from `feature/phase-2.1-crm`'s in-progress CRM work, per instruction). **Not merged into `master` or `develop`, no Coolify deployment triggered, no production data touched — awaiting explicit approval**, per instruction.
+Full record: `docs/DECISION_LOG.md` (2026-11-26 entries). Originally built on `feature/phase-1.5-infra-hardening`, based on `develop` (kept separate from `feature/phase-2.1-crm`'s in-progress CRM work, per instruction at the time). **Since merged into `master`** via the master-first consolidation (see the section below) — approved 2026-11-26. No Coolify deployment has been triggered yet and no production data has been touched; that remains blocked on live Coolify configuration the user must complete — see that section for exactly what's done vs. pending.
 
 ### Root causes confirmed and fixed
 1. Next.js standalone binding to the container's own hostname instead of `0.0.0.0` — the fix existed on `develop` since Phase 1.1 but had never reached `master`/production (only unrelated direct "env" commits had). Re-confirmed via `/proc/net/tcp` inside a running container, before/after.
@@ -154,7 +154,7 @@ Full record: `docs/DECISION_LOG.md`. Branch: `integration/master-consolidation`,
 
 ### What this consolidated
 - `develop`, `feature/phase-1.5-infra-hardening`, and `feature/phase-2.1-crm` merged into `integration/master-consolidation` (three merge commits; one conflict, in `docs/DECISION_LOG.md`, resolved by keeping all three entries). `main` confirmed to carry no unique commits beyond what `master` already has.
-- Backup tags created before any merging: `backup/main-20261126`, `backup/master-20261126`, `backup/develop-20261126`, `backup/feature-phase-1.5-infra-hardening-20261126`, `backup/feature-phase-2.1-crm-20261126`.
+- Backup tags created before any merging: `backup/main-20261126`, `backup/master-20261126`, `backup/develop-20261126`, `backup/feature-phase-1.5-infra-hardening-20261126`, `backup/feature-phase-2.1-crm-20261126`. A further tag, `backup/master-pre-consolidation-20261126`, was created for `master`'s own tip immediately before merging `integration/master-consolidation` into it.
 
 ### Real CI bugs found and fixed (not pre-existing-knowledge — each root-caused from the actual GitHub Actions run via the public check-runs annotations API, then reproduced locally before fixing)
 1. **`lint-and-typecheck` failure**: `src/app/layout.tsx` used Next's ambient `LayoutProps<"/">` type, generated only into the gitignored `.next/types/` directory by `next dev`/`next build` — CI's typecheck job never builds first, so a clean checkout genuinely lacks it (passed locally only because a prior `next dev` run had left it on disk). Fixed by typing the prop explicitly with `ReactNode` instead of depending on a generated file. Verified by removing `.next/types` locally and re-running `pnpm typecheck`/`pnpm build` clean.
@@ -170,8 +170,8 @@ Per explicit instruction, manually tested (not just read) that `scripts/check-mi
 ### CI-gated production deployment added (not yet exercised against a live Coolify instance)
 A `deploy` job in `.github/workflows/ci.yml`: runs only on a direct push to `master`, gated by `needs:` on every required job (lint/typecheck, migration-integrity, security, test, build, both Docker jobs), calls Coolify's deploy webhook via `curl` using two GitHub Actions secrets (`COOLIFY_WEBHOOK_URL`, `COOLIFY_WEBHOOK_TOKEN` — never printed, including the response body), and carries a `concurrency: { group: production-deploy, cancel-in-progress: false }` block so overlapping pushes queue their deployments instead of racing. Documented in `docs/DEPLOYMENT_RUNBOOK.md` §1.1–§1.2/§2: the exact secrets to add, and the exact Coolify-side change required (disable Coolify's own native "deploy on push" for this resource, since leaving it on alongside the webhook would cause two independent deployments per push). The webhook request shape (`GET` + `Authorization: Bearer`) matches Coolify's documented API but has **not been verified against this project's live Coolify instance** — flagged as pending the same way every other live-environment item in this file is.
 
-### Explicitly NOT done, by instruction
-Not merged into `master`. Default branch not changed. No branch deleted. No Coolify deployment triggered — real or test. No production database touched. No CI check bypassed, disabled, or weakened — every failure found was root-caused and fixed in the check itself.
+### Status update (2026-11-26, approved)
+**Merged into `master`** (merge commit, `--no-ff`, no force-push; backup tag `backup/master-pre-consolidation-20261126` on master's pre-merge tip). Still explicitly NOT done: the GitHub default branch has not been changed (requires repo-admin permissions this session doesn't have — manual steps provided to the user), no branch has been deleted, no Coolify deployment has been triggered (real or test — blocked on live Coolify credentials this session doesn't have), no production database has been touched, and no CI check was ever bypassed, disabled, or weakened — every failure found was root-caused and fixed in the check itself.
 
 ## Known limitations
 
@@ -186,4 +186,4 @@ Not merged into `master`. Default branch not changed. No branch deleted. No Cool
 
 ## Recommended next step
 
-Phase 1.5 is implementation-complete and locally validated, on `feature/phase-1.5-infra-hardening`, **awaiting review and explicit approval before merging to `develop`/`master`** (per instruction — no merge, no deploy was performed). Once approved and the live-environment pending items above are checked off, resume Phase 2.1 CRM work (schema + first migration already exist on `feature/phase-2.1-crm`, built before this phase started) — see `docs/MASTER_ROADMAP.md` for the Phase 2 scope reconciliation and `docs/COMPETITIVE_ANALYSIS.md` for the Phase 2 competitive research.
+**Superseded by the master-first consolidation above:** Phase 1.5 and Phase 2.1's CRM foundation (schema + first migration) have since been merged into `master` (approved 2026-11-26 — see `docs/DECISION_LOG.md`). Remaining before resuming Phase 2.1 CRM feature work: the live-Coolify-environment items still pending in that section (GitHub default branch, Coolify webhook/secrets configuration, production verification) — see the "Master-first Git workflow consolidation" section above for exactly what's done vs. blocked on the user.
