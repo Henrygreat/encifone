@@ -30,6 +30,7 @@ export async function getDashboardSummary(acting: ActiveMembership) {
     overdueTasksCount,
     upcomingFollowUps,
     leadsBySource,
+    valueByStage,
   ] = await Promise.all([
     prisma.contact.count({ where: { organisationId, deletedAt: null } }),
     prisma.company.count({ where: { organisationId, deletedAt: null } }),
@@ -66,7 +67,27 @@ export async function getDashboardSummary(acting: ActiveMembership) {
       where: { organisationId, source: { not: null } },
       _count: { _all: true },
     }),
+    prisma.opportunity.groupBy({
+      by: ["stageId"],
+      where: { organisationId, deletedAt: null, status: "OPEN" },
+      _sum: { valueMinor: true },
+      _count: { _all: true },
+    }),
   ]);
+
+  const stageIds = valueByStage.map((row) => row.stageId);
+  const stages = stageIds.length
+    ? await prisma.pipelineStage.findMany({ where: { id: { in: stageIds } }, select: { id: true, name: true, position: true } })
+    : [];
+  const stageById = new Map(stages.map((s) => [s.id, s]));
+  const pipelineByStage = valueByStage
+    .map((row) => ({
+      stageName: stageById.get(row.stageId)?.name ?? "Unknown",
+      position: stageById.get(row.stageId)?.position ?? 0,
+      valueMinor: row._sum.valueMinor ?? 0,
+      count: row._count._all,
+    }))
+    .sort((a, b) => a.position - b.position);
 
   // Weighted forecast: each open opportunity's value times its own
   // probability override, or its stage's default probability if unset —
@@ -92,5 +113,6 @@ export async function getDashboardSummary(acting: ActiveMembership) {
     leadsBySource: leadsBySource
       .map((row) => ({ source: row.source ?? "Unknown", count: row._count._all }))
       .sort((a, b) => b.count - a.count),
+    pipelineByStage,
   };
 }

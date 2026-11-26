@@ -7,7 +7,14 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-sans);
+  /* Fixed 2026-11-26: this previously read `var(--font-sans)` — a
+     self-reference that never resolved, since the actual variable Next's
+     font loader injects (via `geistSans.variable` in layout.tsx) is
+     `--font-geist-sans`. Tailwind's `font-sans` utility (applied to <html>
+     below) was therefore falling through to the browser's default font
+     stack — the root cause of the serif-in-production symptom. See
+     docs/DECISION_LOG.md. */
+  --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
   --font-heading: var(--font-sans);
   --color-sidebar-ring: var(--sidebar-ring);
@@ -60,93 +67,97 @@
 }
 
 :root {
-  /* EncifOne brand tokens — see docs/DESIGN_SYSTEM.md. Tenant/platform
-     overridable via Organisation.branding. Base palette: Indigo/Violet
-     primary family, Midnight Navy ink, Electric Blue/Emerald/Cyan/Amber/Rose
-     as module accents and semantic states. */
+  /* EncifOne "Intelligent Workspace" design system v3 (Phase 2A.1,
+     2026-11-26) — see docs/DESIGN_SYSTEM.md. Tenant/platform overridable
+     via Organisation.branding. Dark-first palette (Midnight/Deep Navy are
+     the brand's primary identity — see .dark below); light mode uses the
+     same accent hues on a clean light surface for consistency.
+     Primary/destructive pair with a dark foreground rather than white —
+     Emerald (#10B981) and Coral (#FB7185) both measure under 3:1 against
+     white text (checked by calculation) but over 7.8:1 against the
+     palette's own dark navy, which is the more natural pairing for a
+     "neon-on-dark" accent system anyway. */
   --card: #ffffff;
-  --card-foreground: #0b1020;
+  --card-foreground: #0b1220;
   --popover: #ffffff;
-  --popover-foreground: #0b1020;
-  /* Deepened one step from the raw Indigo/Rose module-accent hexes below —
-     #6366f1/#f43f5e on white text measure ~4.5:1/~3.7:1, short of WCAG AA's
-     4.5:1 for normal text. These two shades (Tailwind indigo-600/rose-600
-     neighbours) measure ~6.3:1/~4.7:1 and are what text actually renders on. */
-  --primary: #4f46e5;
-  --primary-foreground: #ffffff;
-  --secondary: #eef0fb;
-  --secondary-foreground: #0b1020;
-  --muted: #eef1f8;
-  --muted-foreground: #5b6478;
-  --accent: #eef0fb;
-  --accent-foreground: #0b1020;
-  --destructive: #e11d48;
-  --destructive-foreground: #ffffff;
-  --border: #e3e6f0;
-  --input: #e3e6f0;
-  --ring: #6366f1;
+  --popover-foreground: #0b1220;
+  --primary: #10b981;
+  --primary-foreground: #060b14;
+  --secondary: #eef2f6;
+  --secondary-foreground: #0b1220;
+  --muted: #eef2f6;
+  --muted-foreground: #5b6578;
+  --accent: #e8fbf5;
+  --accent-foreground: #0b1220;
+  --destructive: #fb7185;
+  --destructive-foreground: #060b14;
+  --border: #e2e7ee;
+  --input: #e2e7ee;
+  --ring: #10b981;
   --success: #10b981;
-  --warning: #f59e0b;
-  --chart-1: #6366f1;
-  --chart-2: #2563eb;
-  --chart-3: #10b981;
-  --chart-4: #06b6d4;
-  --chart-5: #f59e0b;
+  --warning: #fbbf24;
+  --chart-1: #10b981;
+  --chart-2: #22d3ee;
+  --chart-3: #8b5cf6;
+  --chart-4: #3b82f6;
+  --chart-5: #fbbf24;
   --radius: 0.75rem;
+  --shadow-elevated: 0 12px 32px -8px rgba(11, 18, 32, 0.18);
   --sidebar: #ffffff;
-  --sidebar-foreground: #0b1020;
-  --sidebar-primary: #4f46e5;
-  --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #eef0fb;
-  --sidebar-accent-foreground: #0b1020;
-  --sidebar-border: #e3e6f0;
-  --sidebar-ring: #6366f1;
-  --background: #f5f7fc;
-  --foreground: #0b1020;
-  --module-overview: #6366f1;
-  --module-crm: #f59e0b;
+  --sidebar-foreground: #0b1220;
+  --sidebar-primary: #10b981;
+  --sidebar-primary-foreground: #060b14;
+  --sidebar-accent: #e8fbf5;
+  --sidebar-accent-foreground: #0b1220;
+  --sidebar-border: #e2e7ee;
+  --sidebar-ring: #10b981;
+  --background: #f7f9fb;
+  --foreground: #0b1220;
+  --module-overview: #22d3ee;
+  --module-crm: #fbbf24;
   --module-sales: #10b981;
-  --module-work: #2563eb;
+  --module-work: #3b82f6;
   --module-intelligence: #8b5cf6;
-  --module-admin: #475569;
+  --module-admin: #64748b;
 }
 
 .dark {
-  --background: #0b1020;
-  --foreground: #f1f3fb;
-  --card: #111827;
-  --card-foreground: #f1f3fb;
-  --popover: #111827;
-  --popover-foreground: #f1f3fb;
-  --primary: #818cf8;
-  --primary-foreground: #0b1020;
-  --secondary: #1b2333;
-  --secondary-foreground: #f1f3fb;
-  --muted: #1b2333;
-  --muted-foreground: #9aa4bf;
-  --accent: #1b2333;
-  --accent-foreground: #f1f3fb;
+  --background: #060b14;
+  --foreground: #e7ecf4;
+  --card: #101827;
+  --card-foreground: #e7ecf4;
+  --popover: #101827;
+  --popover-foreground: #e7ecf4;
+  --primary: #10b981;
+  --primary-foreground: #060b14;
+  --secondary: #16202e;
+  --secondary-foreground: #e7ecf4;
+  --muted: #16202e;
+  --muted-foreground: #8b97ac;
+  --accent: #16202e;
+  --accent-foreground: #e7ecf4;
   --destructive: #fb7185;
-  --destructive-foreground: #0b1020;
-  --border: rgba(255, 255, 255, 0.09);
-  --input: rgba(255, 255, 255, 0.13);
-  --ring: #818cf8;
+  --destructive-foreground: #060b14;
+  --border: rgba(255, 255, 255, 0.08);
+  --input: rgba(255, 255, 255, 0.12);
+  --ring: #34d399;
   --success: #34d399;
   --warning: #fbbf24;
-  --chart-1: #818cf8;
-  --chart-2: #60a5fa;
-  --chart-3: #34d399;
-  --chart-4: #22d3ee;
+  --chart-1: #34d399;
+  --chart-2: #22d3ee;
+  --chart-3: #a78bfa;
+  --chart-4: #60a5fa;
   --chart-5: #fbbf24;
-  --sidebar: #111827;
-  --sidebar-foreground: #f1f3fb;
-  --sidebar-primary: #818cf8;
-  --sidebar-primary-foreground: #0b1020;
-  --sidebar-accent: #1b2333;
-  --sidebar-accent-foreground: #f1f3fb;
-  --sidebar-border: rgba(255, 255, 255, 0.09);
-  --sidebar-ring: #818cf8;
-  --module-overview: #818cf8;
+  --shadow-elevated: 0 20px 48px -12px rgba(0, 0, 0, 0.55);
+  --sidebar: #101827;
+  --sidebar-foreground: #e7ecf4;
+  --sidebar-primary: #10b981;
+  --sidebar-primary-foreground: #060b14;
+  --sidebar-accent: #16202e;
+  --sidebar-accent-foreground: #e7ecf4;
+  --sidebar-border: rgba(255, 255, 255, 0.08);
+  --sidebar-ring: #34d399;
+  --module-overview: #22d3ee;
   --module-crm: #fbbf24;
   --module-sales: #34d399;
   --module-work: #60a5fa;
@@ -163,5 +174,95 @@
   }
   html {
     @apply font-sans;
+  }
+}
+
+/* A separate, deliberately plainer theme for future client-facing
+   surfaces (onboarding, agreements, payments, document uploads, project
+   progress — none built yet) — see docs/DESIGN_SYSTEM.md §10. Scoped by
+   class, not a global override, so internal staff UI is never
+   accidentally affected. Minimal: one accent, no gradient borders, no
+   glass panels, no module-colour system — a client filling in a form or
+   reviewing a document shouldn't see the same "intelligent workspace"
+   chrome staff use internally. */
+.theme-client-portal {
+  --background: #ffffff;
+  --foreground: #101827;
+  --card: #ffffff;
+  --card-foreground: #101827;
+  --popover: #ffffff;
+  --popover-foreground: #101827;
+  /* #047857 (not the raw #10B981 swatch) — this theme pairs primary with
+     white text, and the raw swatch only measures ~3.8:1 against white;
+     this deeper shade measures ~5.5:1, checked by calculation. */
+  --primary: #047857;
+  --primary-foreground: #ffffff;
+  --secondary: #f1f5f9;
+  --secondary-foreground: #101827;
+  --muted: #f1f5f9;
+  --muted-foreground: #64748b;
+  --accent: #f1f5f9;
+  --accent-foreground: #101827;
+  --destructive: #e11d48;
+  --destructive-foreground: #ffffff;
+  --border: #e2e8f0;
+  --input: #e2e8f0;
+  --ring: #10b981;
+}
+.theme-client-portal.dark {
+  --background: #0f172a;
+  --foreground: #f1f5f9;
+  --card: #1e293b;
+  --card-foreground: #f1f5f9;
+  --popover: #1e293b;
+  --popover-foreground: #f1f5f9;
+  --primary: #34d399;
+  --primary-foreground: #0f172a;
+  --secondary: #1e293b;
+  --secondary-foreground: #f1f5f9;
+  --muted: #1e293b;
+  --muted-foreground: #94a3b8;
+  --accent: #1e293b;
+  --accent-foreground: #f1f5f9;
+  --border: rgba(255, 255, 255, 0.1);
+  --input: rgba(255, 255, 255, 0.14);
+}
+
+@layer utilities {
+  /* Subtle glassmorphism — a translucent, blurred surface. Used sparingly
+     (command palette, floating panels), never as the default card style —
+     see docs/DESIGN_SYSTEM.md §1 on avoiding unnecessary glass effects. */
+  .glass-panel {
+    background: color-mix(in srgb, var(--card) 72%, transparent);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+  }
+
+  /* A 1px gradient border via mask-composite, so the element's own
+     border-radius is respected exactly (no separate wrapper element).
+     --gradient-border-from/--gradient-border-to default to the sales/
+     intelligence module accents but can be overridden inline per
+     instance, e.g. style={{ "--gradient-border-from": accent }}. */
+  .gradient-border {
+    position: relative;
+    --gradient-border-from: var(--module-sales);
+    --gradient-border-to: var(--module-intelligence);
+  }
+  .gradient-border::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(135deg, var(--gradient-border-from), var(--gradient-border-to));
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    mask-composite: exclude;
+    -webkit-mask-composite: xor;
+    pointer-events: none;
+  }
+
+  .shadow-elevated {
+    box-shadow: var(--shadow-elevated);
   }
 }
