@@ -315,9 +315,13 @@ export async function moveOpportunity(acting: ActiveMembership, id: string, inpu
     where: { id, organisationId: acting.organisationId },
   });
   if (!opportunity) throw new NotFoundError("Opportunity not found.");
+  if (!input.orderedIds.includes(id)) {
+    throw new Error("orderedIds must include the opportunity being moved.");
+  }
 
   const targetStage = await assertStageInPipeline(acting.organisationId, opportunity.pipelineId, input.stageId);
   const stageChanged = targetStage.id !== opportunity.stageId;
+  const position = input.orderedIds.indexOf(id);
 
   const statusFields = targetStage.isWon
     ? {
@@ -342,7 +346,7 @@ export async function moveOpportunity(acting: ActiveMembership, id: string, inpu
       where: { id },
       data: {
         stageId: input.stageId,
-        position: input.position,
+        position,
         ...statusFields,
       },
     });
@@ -351,6 +355,20 @@ export async function moveOpportunity(acting: ActiveMembership, id: string, inpu
         data: { opportunityId: id, fromStageId: opportunity.stageId, toStageId: input.stageId },
       });
     }
+    // Reindex every OTHER card in the destination column to match its new
+    // position in orderedIds — not just the dragged card — so positions
+    // never collide or drift after repeated drags.
+    await Promise.all(
+      input.orderedIds
+        .map((cardId, index) => ({ cardId, index }))
+        .filter(({ cardId }) => cardId !== id)
+        .map(({ cardId, index }) =>
+          tx.opportunity.updateMany({
+            where: { id: cardId, organisationId: acting.organisationId },
+            data: { position: index },
+          })
+        )
+    );
     return result;
   });
 

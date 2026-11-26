@@ -135,7 +135,7 @@ describe("Opportunity stage move", () => {
 
     const moved = await moveOpportunity(actingAsOrgAOwner, deal.id, {
       stageId: wonStage.id,
-      position: 0,
+      orderedIds: [deal.id],
       wonReason: "Great fit",
     });
 
@@ -162,15 +162,22 @@ describe("Opportunity stage move", () => {
       name: `Reopen me ${randomUUID()}`,
     });
 
-    await moveOpportunity(actingAsOrgAOwner, deal.id, { stageId: lostStage.id, position: 0, lostReason: "Budget" });
-    const reopened = await moveOpportunity(actingAsOrgAOwner, deal.id, { stageId: newStage.id, position: 0 });
+    await moveOpportunity(actingAsOrgAOwner, deal.id, {
+      stageId: lostStage.id,
+      orderedIds: [deal.id],
+      lostReason: "Budget",
+    });
+    const reopened = await moveOpportunity(actingAsOrgAOwner, deal.id, {
+      stageId: newStage.id,
+      orderedIds: [deal.id],
+    });
 
     expect(reopened.status).toBe("OPEN");
     expect(reopened.lostAt).toBeNull();
     expect(reopened.lostReason).toBeNull();
   });
 
-  it("does not write a stage-history row for a same-stage reorder", async () => {
+  it("does not write a stage-history row for a same-stage reorder, and reindexes siblings too", async () => {
     const pipeline = await ensureDefaultPipeline(actingAsOrgAOwner);
     const stage = pipeline.stages.find((s) => s.name === "Qualified")!;
 
@@ -179,16 +186,25 @@ describe("Opportunity stage move", () => {
       stageId: stage.id,
       name: `Reorder A ${randomUUID()}`,
     });
-    await createOpportunity(actingAsOrgAOwner, {
+    const dealTwo = await createOpportunity(actingAsOrgAOwner, {
       pipelineId: pipeline.id,
       stageId: stage.id,
       name: `Reorder B ${randomUUID()}`,
     });
+    expect(dealOne.position).toBeLessThan(dealTwo.position);
 
     const before = await prisma.opportunityStageHistory.count({ where: { opportunityId: dealOne.id } });
-    await moveOpportunity(actingAsOrgAOwner, dealOne.id, { stageId: stage.id, position: 1 });
+    // Swap order: dealTwo now first, dealOne second.
+    await moveOpportunity(actingAsOrgAOwner, dealOne.id, {
+      stageId: stage.id,
+      orderedIds: [dealTwo.id, dealOne.id],
+    });
     const after = await prisma.opportunityStageHistory.count({ where: { opportunityId: dealOne.id } });
-
     expect(after).toBe(before);
+
+    const refreshedOne = await prisma.opportunity.findUniqueOrThrow({ where: { id: dealOne.id } });
+    const refreshedTwo = await prisma.opportunity.findUniqueOrThrow({ where: { id: dealTwo.id } });
+    expect(refreshedOne.position).toBe(1);
+    expect(refreshedTwo.position).toBe(0);
   });
 });

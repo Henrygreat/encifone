@@ -53,11 +53,14 @@ export const listOpportunitiesQuerySchema = z.object({
 });
 export type ListOpportunitiesQuery = z.infer<typeof listOpportunitiesQuerySchema>;
 
-/** Kanban drag-drop persistence — move to a (possibly new) stage at a given
- * position within that stage's column. */
+/** Kanban drag-drop persistence — move to a (possibly new) stage.
+ * `orderedIds` is the destination column's full card order AFTER this move
+ * (including the dragged card) — every card in it gets its `position`
+ * reindexed to its array index, not just the dragged one, so positions
+ * never collide or drift after repeated drags. */
 export const moveOpportunitySchema = z.object({
   stageId: z.string().min(1),
-  position: z.number().int().min(0),
+  orderedIds: z.array(z.string().min(1)).min(1).max(500),
   // Only meaningful when the destination stage is flagged isWon/isLost —
   // the service ignores these otherwise.
   wonReason: z.string().max(500).optional(),
