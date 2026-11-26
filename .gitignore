@@ -43,3 +43,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Claude Code session-local state (scheduled-task locks etc.) — never
+# project content, accidentally committed once (see docs/DECISION_LOG.md).
+/.claude/
