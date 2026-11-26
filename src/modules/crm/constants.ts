@@ -5,3 +5,13 @@
  */
 export const CONTACT_STATUSES = ["ACTIVE", "INACTIVE", "ARCHIVED"] as const;
 export const COMPANY_STATUSES = ["ACTIVE", "INACTIVE", "ARCHIVED"] as const;
+export const LEAD_STATUSES = [
+  "NEW",
+  "CONTACTED",
+  "QUALIFIED",
+  "UNQUALIFIED",
+  "CONVERTED",
+  "LOST",
+  "ARCHIVED",
+] as const;
+export const LEAD_PRIORITIES = ["LOW", "MEDIUM", "HIGH"] as const;

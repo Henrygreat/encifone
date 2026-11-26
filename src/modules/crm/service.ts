@@ -1,16 +1,20 @@
-import { CompanyStatus, ContactStatus, Prisma } from "@prisma/client";
+import { CompanyStatus, ContactStatus, LeadStatus, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { writeAuditLog } from "@/core/audit";
 import { Capability, ForbiddenError, roleHasCapability } from "@/core/permissions";
 import type { ActiveMembership } from "@/core/tenancy";
 import { NotFoundError } from "@/lib/api";
 import type {
+  ConvertLeadInput,
   CreateCompanyInput,
   CreateContactInput,
+  CreateLeadInput,
   ListCompaniesQuery,
   ListContactsQuery,
+  ListLeadsQuery,
   UpdateCompanyInput,
   UpdateContactInput,
+  UpdateLeadInput,
 } from "./schemas";
 
 function requireCapability(acting: ActiveMembership, capability: Capability) {
@@ -355,4 +359,265 @@ export async function archiveCompany(acting: ActiveMembership, id: string) {
   });
 
   return company;
+}
+
+// --- Leads ---
+
+export async function listLeads(acting: ActiveMembership, query: ListLeadsQuery) {
+  requireCapability(acting, Capability.CRM_VIEW);
+
+  const where: Prisma.LeadWhereInput = {
+    organisationId: acting.organisationId,
+    deletedAt: query.status === LeadStatus.ARCHIVED ? { not: null } : null,
+    ...(query.status ? { status: query.status } : {}),
+    ...(query.priority ? { priority: query.priority } : {}),
+    ...(query.ownerId ? { ownerId: query.ownerId } : {}),
+    ...(query.search
+      ? {
+          OR: [
+            { firstName: { contains: query.search, mode: "insensitive" } },
+            { lastName: { contains: query.search, mode: "insensitive" } },
+            { email: { contains: query.search, mode: "insensitive" } },
+            { companyName: { contains: query.search, mode: "insensitive" } },
+          ],
+        }
+      : {}),
+  };
+
+  const [items, total] = await Promise.all([
+    prisma.lead.findMany({
+      where,
+      include: { owner: { include: { user: true } }, company: { select: { id: true, name: true } } },
+      orderBy: { [query.sortBy]: query.sortDir },
+      skip: (query.page - 1) * query.pageSize,
+      take: query.pageSize,
+    }),
+    prisma.lead.count({ where }),
+  ]);
+
+  return { items, total, page: query.page, pageSize: query.pageSize, totalPages: Math.ceil(total / query.pageSize) || 1 };
+}
+
+export async function getLead(acting: ActiveMembership, id: string) {
+  requireCapability(acting, Capability.CRM_VIEW);
+
+  const lead = await prisma.lead.findFirst({
+    where: { id, organisationId: acting.organisationId },
+    include: {
+      owner: { include: { user: true } },
+      company: true,
+      contact: true,
+      ownershipHistory: { orderBy: { changedAt: "desc" } },
+    },
+  });
+  if (!lead) throw new NotFoundError("Lead not found.");
+  return lead;
+}
+
+export async function createLead(acting: ActiveMembership, input: CreateLeadInput) {
+  requireCapability(acting, Capability.CRM_MANAGE);
+
+  if (input.ownerId) {
+    await assertMembershipInOrg(acting.organisationId, input.ownerId);
+  }
+
+  const lead = await prisma.lead.create({
+    data: {
+      organisationId: acting.organisationId,
+      firstName: input.firstName,
+      lastName: input.lastName,
+      email: input.email,
+      phone: input.phone,
+      companyName: input.companyName,
+      source: input.source,
+      status: input.status ?? LeadStatus.NEW,
+      priority: input.priority ?? "MEDIUM",
+      estimatedValueMinor: input.estimatedValueMinor,
+      currency: input.currency ?? "GBP",
+      ownerId: input.ownerId,
+      nextFollowUpAt: input.nextFollowUpAt,
+      tags: input.tags ?? [],
+      notes: input.notes,
+    },
+  });
+
+  await writeAuditLog({
+    organisationId: acting.organisationId,
+    actorUserId: acting.userId,
+    action: "lead.created",
+    resourceType: "Lead",
+    resourceId: lead.id,
+  });
+
+  return lead;
+}
+
+export async function updateLead(acting: ActiveMembership, id: string, input: UpdateLeadInput) {
+  requireCapability(acting, Capability.CRM_MANAGE);
+
+  const existing = await prisma.lead.findFirst({
+    where: { id, organisationId: acting.organisationId },
+  });
+  if (!existing) throw new NotFoundError("Lead not found.");
+
+  if (input.ownerId) {
+    await assertMembershipInOrg(acting.organisationId, input.ownerId);
+  }
+
+  const ownerChanged = input.ownerId !== undefined && input.ownerId !== existing.ownerId;
+
+  const lead = await prisma.$transaction(async (tx) => {
+    const updated = await tx.lead.update({ where: { id }, data: input });
+    if (ownerChanged) {
+      await tx.leadOwnershipHistory.create({
+        data: { leadId: id, fromOwnerId: existing.ownerId, toOwnerId: input.ownerId ?? null },
+      });
+    }
+    return updated;
+  });
+
+  await writeAuditLog({
+    organisationId: acting.organisationId,
+    actorUserId: acting.userId,
+    action: ownerChanged ? "lead.reassigned" : "lead.updated",
+    resourceType: "Lead",
+    resourceId: lead.id,
+    metadata: ownerChanged
+      ? { fromOwnerId: existing.ownerId, toOwnerId: input.ownerId ?? null }
+      : { fields: Object.keys(input) },
+  });
+
+  return lead;
+}
+
+export async function archiveLead(acting: ActiveMembership, id: string) {
+  requireCapability(acting, Capability.CRM_MANAGE);
+
+  const existing = await prisma.lead.findFirst({
+    where: { id, organisationId: acting.organisationId },
+    select: { id: true },
+  });
+  if (!existing) throw new NotFoundError("Lead not found.");
+
+  const lead = await prisma.lead.update({
+    where: { id },
+    data: { status: LeadStatus.ARCHIVED, deletedAt: new Date() },
+  });
+
+  await writeAuditLog({
+    organisationId: acting.organisationId,
+    actorUserId: acting.userId,
+    action: "lead.archived",
+    resourceType: "Lead",
+    resourceId: lead.id,
+  });
+
+  return lead;
+}
+
+/**
+ * Converts a lead into a real Contact/Company. Either links to an existing
+ * Company/Contact in this organisation (`input.companyId`/`contactId` —
+ * verified same-tenant, never trusted blind) or creates one from the lead's
+ * free-text fields (`companyName`, `firstName`/`lastName`/`email`/`phone`)
+ * if nothing to link to was provided and the lead already had none. All in
+ * one transaction so a partial conversion (e.g. company created but the
+ * lead update fails) can never be left behind.
+ */
+export async function convertLead(acting: ActiveMembership, id: string, input: ConvertLeadInput) {
+  requireCapability(acting, Capability.CRM_MANAGE);
+
+  const lead = await prisma.lead.findFirst({ where: { id, organisationId: acting.organisationId } });
+  if (!lead) throw new NotFoundError("Lead not found.");
+  if (lead.status === LeadStatus.CONVERTED) {
+    throw new Error("This lead has already been converted.");
+  }
+
+  if (input.companyId) {
+    const company = await prisma.company.findFirst({
+      where: { id: input.companyId, organisationId: acting.organisationId },
+      select: { id: true },
+    });
+    if (!company) throw new NotFoundError("The selected company was not found in this organisation.");
+  }
+  if (input.contactId) {
+    const contact = await prisma.contact.findFirst({
+      where: { id: input.contactId, organisationId: acting.organisationId },
+      select: { id: true },
+    });
+    if (!contact) throw new NotFoundError("The selected contact was not found in this organisation.");
+  }
+
+  const result = await prisma.$transaction(async (tx) => {
+    let companyId = input.companyId ?? lead.companyId ?? null;
+    let createdCompanyId: string | null = null;
+    if (!companyId && lead.companyName) {
+      const company = await tx.company.create({
+        data: {
+          organisationId: acting.organisationId,
+          name: lead.companyName,
+          ownerId: lead.ownerId,
+        },
+      });
+      companyId = company.id;
+      createdCompanyId = company.id;
+    }
+
+    let contactId = input.contactId ?? lead.contactId ?? null;
+    let createdContactId: string | null = null;
+    if (!contactId && (lead.firstName || lead.lastName || lead.email)) {
+      const contact = await tx.contact.create({
+        data: {
+          organisationId: acting.organisationId,
+          firstName: lead.firstName ?? "Unknown",
+          lastName: lead.lastName ?? "",
+          companyId,
+          ownerId: lead.ownerId,
+          leadSource: lead.source,
+          emails: lead.email ? [{ address: lead.email, isPrimary: true }] : [],
+          phones: lead.phone ? [{ number: lead.phone, isPrimary: true }] : [],
+        },
+      });
+      contactId = contact.id;
+      createdContactId = contact.id;
+    }
+
+    const updatedLead = await tx.lead.update({
+      where: { id },
+      data: { status: LeadStatus.CONVERTED, convertedAt: new Date(), companyId, contactId },
+    });
+
+    return { lead: updatedLead, createdCompanyId, createdContactId, companyId, contactId };
+  });
+
+  await writeAuditLog({
+    organisationId: acting.organisationId,
+    actorUserId: acting.userId,
+    action: "lead.converted",
+    resourceType: "Lead",
+    resourceId: id,
+    metadata: { companyId: result.companyId, contactId: result.contactId },
+  });
+  if (result.createdCompanyId) {
+    await writeAuditLog({
+      organisationId: acting.organisationId,
+      actorUserId: acting.userId,
+      action: "company.created",
+      resourceType: "Company",
+      resourceId: result.createdCompanyId,
+      metadata: { fromLeadId: id },
+    });
+  }
+  if (result.createdContactId) {
+    await writeAuditLog({
+      organisationId: acting.organisationId,
+      actorUserId: acting.userId,
+      action: "contact.created",
+      resourceType: "Contact",
+      resourceId: result.createdContactId,
+      metadata: { fromLeadId: id },
+    });
+  }
+
+  return result;
 }

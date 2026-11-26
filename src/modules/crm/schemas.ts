@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { CompanyStatus, ContactStatus } from "@prisma/client";
+import { CompanyStatus, ContactStatus, LeadPriority, LeadStatus } from "@prisma/client";
 
 export const contactEmailSchema = z.object({
   address: z.string().email(),
@@ -82,3 +82,46 @@ export const listCompaniesQuerySchema = z.object({
   sortDir: z.enum(["asc", "desc"]).default("desc"),
 });
 export type ListCompaniesQuery = z.infer<typeof listCompaniesQuerySchema>;
+
+export const createLeadSchema = z.object({
+  firstName: z.string().max(120).optional(),
+  lastName: z.string().max(120).optional(),
+  email: z.string().email().optional(),
+  phone: z.string().max(40).optional(),
+  // Free-text until qualified onto a real Company record (Lead.companyName
+  // in prisma/schema.prisma) — resolved into a real Company only on convert.
+  companyName: z.string().max(200).optional(),
+  source: z.string().max(120).optional(),
+  status: z.nativeEnum(LeadStatus).optional(),
+  priority: z.nativeEnum(LeadPriority).optional(),
+  estimatedValueMinor: z.number().int().min(0).max(100_000_000_00).optional(),
+  currency: z.string().length(3).optional(),
+  ownerId: z.string().min(1).optional(),
+  nextFollowUpAt: z.coerce.date().optional(),
+  tags: tagsSchema.optional(),
+  notes: z.string().max(5000).optional(),
+});
+export type CreateLeadInput = z.infer<typeof createLeadSchema>;
+
+export const updateLeadSchema = createLeadSchema.partial();
+export type UpdateLeadInput = z.infer<typeof updateLeadSchema>;
+
+export const listLeadsQuerySchema = z.object({
+  search: z.string().max(200).optional(),
+  status: z.nativeEnum(LeadStatus).optional(),
+  priority: z.nativeEnum(LeadPriority).optional(),
+  ownerId: z.string().min(1).optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(25),
+  sortBy: z.enum(["createdAt", "updatedAt", "nextFollowUpAt"]).default("createdAt"),
+  sortDir: z.enum(["asc", "desc"]).default("desc"),
+});
+export type ListLeadsQuery = z.infer<typeof listLeadsQuerySchema>;
+
+/** Optional overrides when converting — link to an existing Company/Contact
+ * instead of creating a new one from the lead's free-text fields. */
+export const convertLeadSchema = z.object({
+  companyId: z.string().min(1).optional(),
+  contactId: z.string().min(1).optional(),
+});
+export type ConvertLeadInput = z.infer<typeof convertLeadSchema>;

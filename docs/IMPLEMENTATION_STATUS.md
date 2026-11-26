@@ -187,7 +187,7 @@ Full record: `docs/DECISION_LOG.md`. See `docs/MASTER_ROADMAP.md` "Phase 2A" for
 - **New shadcn primitives:** `tabs`, `popover`, `checkbox`, `switch`, `progress`, `alert`, `scroll-area`, `calendar`.
 - **Validated:** lint, typecheck, `prisma validate`, migration-integrity, local production build all pass clean.
 
-### Milestone B — CRM foundation (Contacts & Companies complete; Leads not yet started)
+### Milestone B — CRM foundation (complete: Contacts, Companies, and Leads)
 - **Capabilities:** `Capability.CRM_VIEW`/`CRM_MANAGE`/`CRM_DELETE` added to `src/core/permissions.ts`, wired into `ROLE_CAPABILITIES` for all 14 roles (sales-facing roles get view+manage, `SALES_MANAGER`/`ORGANISATION_ADMIN`/owner/platform-admin additionally get delete; client/contractor roles get none). Unit tests added.
 - **Service layer** (`src/modules/crm/service.ts`, `schemas.ts`, `constants.ts`): `listContacts`/`getContact`/`createContact`/`updateContact`/`archiveContact` and the equivalent for `Company` — every function takes the already-verified `ActiveMembership` first, checks `roleHasCapability`, scopes every query by `organisationId`, verifies a cross-tenant `companyId`/`ownerId`/`parentCompanyId` is rejected (not just ignored) before linking it to a record, and writes an audit log entry. Archive is a soft delete (`status: ARCHIVED` + `deletedAt`) — no hard delete exists yet (CRM_DELETE is reserved for that, not yet built).
 - **API routes:** `app/api/v1/{contacts,companies}/route.ts` (list with search/status/owner/company/tag filters + pagination, create) and `[id]/route.ts` (get, update, archive-via-DELETE). New `parseQuery` helper and a shared `NotFoundError` (→ 404) added to `src/lib/api.ts`.
@@ -196,8 +196,14 @@ Full record: `docs/DECISION_LOG.md`. See `docs/MASTER_ROADMAP.md` "Phase 2A" for
 - **Verified live, not just typechecked:** ran the dev server and exercised the actual HTTP flow — register → sign in → create company → create a contact linked to it → search finds it → a second organisation's contact list returns empty (cannot see the first org's data) → both `/contacts` and `/companies` pages render 200 for an authenticated user.
 - **Deliberately deferred within Milestone B/C** (not silently dropped — flagged so scope stays honest): contact/company detail pages with a full profile + activity timeline, tags UI, CSV import/export, duplicate detection/merge, bulk operations, communication-history integration. These are real, substantial features queued as the next slices, not abandoned.
 
+- **Leads:** `listLeads`/`getLead`/`createLead`/`updateLead`/`archiveLead`/`convertLead` (`src/modules/crm/service.ts`), `app/api/v1/leads/route.ts` + `[id]/route.ts` + `[id]/convert/route.ts`, `/leads` UI page (list/search/filter/pagination/quick-create, a "Convert" action per row). `convertLead` runs in one `prisma.$transaction`: links to an existing Company/Contact if an id is given (verified same-tenant) or creates one from the lead's free-text `companyName`/`firstName`/`lastName`/`email`/`phone` if none exists yet, then marks the lead `CONVERTED` with `convertedAt` set — never leaves a partial conversion behind. Reassigning a lead's owner writes a `LeadOwnershipHistory` row (the model already existed in schema, unused until now). `Lead.score` is displayed as-is where present (a plain number, never fabricated) — real AI scoring is Phase 2.8.
+- **Tests:** `tests/integration/lead-conversion.test.ts` — tenant isolation (list/get, cross-org company/contact linking rejected), conversion creates real records and is rejected on a second attempt, converting with an explicit id links instead of duplicating, owner reassignment writes history. 22/22 tests passing total.
+- **Verified live:** full register → sign in → create lead → list → convert → company+contact created and linked → company's contact count reflects it → `/leads` renders 200.
+
+Milestone B is complete. Next: Milestone C (sales pipeline — `Pipeline`/`PipelineStage`/`Opportunity` already in schema since Milestone A — Kanban board, activities).
+
 ### Not yet started
-Leads (within Milestone B), Milestone C (pipeline/Kanban/activities), Milestone D (real-data Bento dashboard, landing-page 3D hero, dashboard AI-orb widget, auth-page visuals), Milestone E (full QA pass, `docs/CRM_USER_GUIDE.md`, final docs sweep).
+Milestone C (pipeline/Kanban/activities), Milestone D (real-data Bento dashboard, landing-page 3D hero, dashboard AI-orb widget, auth-page visuals), Milestone E (full QA pass, `docs/CRM_USER_GUIDE.md`, final docs sweep).
 
 ## Known limitations
 
