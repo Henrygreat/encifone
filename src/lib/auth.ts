@@ -5,6 +5,9 @@ import GoogleProvider from "next-auth/providers/google";
 import { PrismaAdapter } from "@next-auth/prisma-adapter";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
+// Side effect: defaults process.env.NEXTAUTH_URL from APP_URL if unset,
+// before NextAuth's own lazy env read ever runs. Also validates env.
+import { env } from "@/lib/env";
 
 const providers: AuthOptions["providers"] = [
   CredentialsProvider({
@@ -41,6 +44,10 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
 
 export const authOptions: AuthOptions = {
   adapter: PrismaAdapter(prisma),
+  // NextAuth v4 otherwise auto-detects `process.env.NEXTAUTH_SECRET`, which
+  // this app never sets (our own var is AUTH_SECRET) — passing it
+  // explicitly is required, not optional. See docs/DECISION_LOG.md.
+  secret: env.AUTH_SECRET,
   session: { strategy: "jwt" },
   pages: { signIn: "/login" },
   providers,

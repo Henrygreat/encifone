@@ -104,6 +104,50 @@ Full record: `docs/DECISION_LOG.md` (2026-11-26 entry). Performed before any Pha
 - **Verified again post-hardening:** full local stack rebuild, `app` container `HEALTHCHECK` passes (confirmed bind address `0.0.0.0:3000` via `/proc/net/tcp`), worker starts cleanly, `/api/health` ok, lint/typecheck/tests (9/9) all pass.
 - **Phase 1 feature completeness reconfirmed** before starting Phase 2: all four Phase 1 acceptance criteria above still hold; nothing was found to have regressed.
 
+## Phase 1.5 — Production Infrastructure Hardening & Deployment Reliability (implementation complete on `feature/phase-1.5-infra-hardening`; live-environment items pending)
+
+Full record: `docs/DECISION_LOG.md` (2026-11-26 entries). Branch: `feature/phase-1.5-infra-hardening`, based on `develop` (kept separate from `feature/phase-2.1-crm`'s in-progress CRM work, per instruction). **Not merged into `master` or `develop`, no Coolify deployment triggered, no production data touched — awaiting explicit approval**, per instruction.
+
+### Root causes confirmed and fixed
+1. Next.js standalone binding to the container's own hostname instead of `0.0.0.0` — the fix existed on `develop` since Phase 1.1 but had never reached `master`/production (only unrelated direct "env" commits had). Re-confirmed via `/proc/net/tcp` inside a running container, before/after.
+2. NextAuth v4 was never given an explicit `secret` (`src/lib/auth.ts`) — it was silently falling back to an unset `NEXTAUTH_SECRET`. Fixed.
+3. `NEXTAUTH_URL` was never set — fixed via a code-level default from `APP_URL` (`src/lib/env.ts`), not a duplicated env var.
+4. `PORT` was implicit — now explicit everywhere.
+
+### What was built/changed (all verified locally, see below — not just written)
+- Split health checks: `/api/health/live`, `/api/health/ready` (bounded 3s timeouts), `/api/health` kept as a backward-compatible alias.
+- Worker heartbeat file + graceful `SIGTERM`/`SIGINT` handling (`src/workers/index.ts`).
+- `Dockerfile`: explicit `PORT`, improved `HEALTHCHECK`s (app → `/api/health/ready`; worker → heartbeat freshness), non-root `node` user in both runtime stages, `GIT_SHA` build-arg baked into `/app/GIT_SHA` for version tracking.
+- `docker-compose.yml`: `NODE_ENV`/`HOSTNAME`/`PORT` explicit at the compose level too; `deploy.resources.limits` per service; **`app`'s published host port removed** (moved to `docker-compose.local.yml` only) — see Decision Log for the evidence behind this change and what's still unverified about it.
+- `.env.example` fully rewritten with a build-time/runtime/optional/dev-only/secret classification.
+- `.gitattributes` (new) — forces LF on `prisma/migrations/**/*.sql` to stop `core.autocrlf` from silently breaking migration checksums (this had already happened twice — see Decision Log).
+- `scripts/validate-env.sh`, `deploy-preflight.sh`, `deploy-verify.sh`, `diagnose-deployment.sh`, `check-migration-integrity.sh` — all non-destructive, none print secret values, all actually executed and their output verified during this work.
+- `.github/workflows/ci.yml`: added `migration-integrity`, Compose config validation, `docker-multi-network-test` (reproduces the exact production incident), `docker-smoke-test` (runs the real production images end-to-end, including a full auth round trip).
+- New docs: `docs/DEPLOYMENT_RUNBOOK.md`, `docs/TROUBLESHOOTING.md`, `docs/ROLLBACK.md`. Updated: `docs/DEPLOYMENT.md`, `docs/SECURITY.md`, `docs/TESTING.md`, `docs/ARCHITECTURE.md`, `docs/DECISION_LOG.md`, `CLAUDE.md` (rule 13, already added in an earlier pass this session).
+
+### Validated (against the rebuilt local stack, after every change — not only at the end)
+- ✅ `app` and `worker` containers both report Docker-`healthy` (confirmed the worker heartbeat mechanism actually works, not just that it doesn't crash).
+- ✅ Bind address confirmed `0.0.0.0:3000` via `/proc/net/tcp` inside the container.
+- ✅ All three health endpoints respond correctly (`/live`, `/ready`, legacy `/api/health`).
+- ✅ Full auth round trip: register → sign in → session reflects the user → authenticated API call succeeds — with the explicit `secret` fix in place (this is what the `UnauthenticatedError`/`NEXTAUTH_URL` warning symptoms map to).
+- ✅ Unauthenticated access to a protected page/API returns a clean redirect/401, never a 500.
+- ✅ `scripts/check-migration-integrity.sh` tested against both a clean state (passes) and a deliberately tampered commit (correctly fails) — not just run once and assumed correct.
+- ✅ `scripts/deploy-preflight.sh`, `deploy-verify.sh`, `diagnose-deployment.sh` all executed against the live local stack and their output reviewed, including a caught-and-fixed bug in the diagnostic script itself (a leftover buggy debug line) and in `validate-env.sh`'s HOSTNAME check (bash's own ambient `$HOSTNAME` leaking through when run on a bare host shell — fixed by adding `HOSTNAME=0.0.0.0`/`PORT=3000` to the local `.env`).
+- ✅ Lint, typecheck, automated tests (9/9), local build, and full Docker stack build all pass.
+- ✅ `GIT_SHA` build-arg confirmed to bake correctly (explicit value and the "unknown" default both tested).
+- ✅ Resource limits confirmed applied (`docker inspect` shows the configured CPU/memory quotas on the running container).
+
+### Explicitly NOT done, by instruction
+- Not merged into `master` or `develop`. No Coolify deployment triggered. No production database touched, reset, or had data modified. No migration file deleted. No `master`/`develop` branch force-pushed or deleted. No `main` branch deleted (still exists, unused). No staging environment actually provisioned (designed only — `docs/DEPLOYMENT_RUNBOOK.md` §5). GitHub branch protection and Coolify's deploy-trigger scope were **not** configured directly (`gh` CLI unavailable in this environment) — exact manual steps documented instead.
+
+### Pending — requires access to the live Coolify/production environment to verify
+These cannot be confirmed from this working environment; `docs/DEPLOYMENT.md` §4.2 and `docs/DEPLOYMENT_RUNBOOK.md` §1 list them as explicit checklist items:
+- Whether removing `app`'s published host port affects Coolify's ability to (re)assign its domain in the UI.
+- Whether the "Connect to Predefined Network" + Internal URL guidance actually resolves the live database-connectivity issue (it matches Coolify's documented behaviour, but hasn't been tested against this project's actual Coolify instance).
+- Whether Coolify's zero-downtime blue-green redeploy/rollback is actually demonstrated end-to-end (the documented *conditions* for it are now met — health check + no port mapping — but the behaviour itself hasn't been observed live; `docs/ROLLBACK.md` §7 is explicit that this isn't claimed yet).
+- GitHub branch protection rules and Coolify's deploy-trigger scope (both require manual platform configuration).
+- Whether `GIT_SHA` is actually wired into Coolify's build environment from the commit it deploys.
+
 ## Known limitations
 
 - **No email delivery.** Invite links must be shared manually. This blocks any real multi-user onboarding until an email provider (Resend/Postmark) is wired up — planned alongside Phase 2's proposal/contract flows.
@@ -117,4 +161,4 @@ Full record: `docs/DECISION_LOG.md` (2026-11-26 entry). Performed before any Pha
 
 ## Recommended next step
 
-Phase 1.1 and the pre-Phase-2 audit/hardening above are complete and validated. **Phase 2 is now underway**, broken into subphases per feature branch (`feature/phase-2.1-crm`, `feature/phase-2.2-sales-pipeline`, ...), each merged to `develop` only once its own acceptance criteria pass — see `docs/MASTER_ROADMAP.md` for the Phase 2 scope reconciliation and `docs/COMPETITIVE_ANALYSIS.md` for the Phase 2 competitive research.
+Phase 1.5 is implementation-complete and locally validated, on `feature/phase-1.5-infra-hardening`, **awaiting review and explicit approval before merging to `develop`/`master`** (per instruction — no merge, no deploy was performed). Once approved and the live-environment pending items above are checked off, resume Phase 2.1 CRM work (schema + first migration already exist on `feature/phase-2.1-crm`, built before this phase started) — see `docs/MASTER_ROADMAP.md` for the Phase 2 scope reconciliation and `docs/COMPETITIVE_ANALYSIS.md` for the Phase 2 competitive research.

@@ -89,7 +89,17 @@ Full AI architecture detail: `docs/AI_ARCHITECTURE.md`.
 - Impersonation (if implemented) must be time-limited, require a logged justification, and be fully audited (`AuditLog`) — never silent or indefinite.
 - Platform admin actions affecting a tenant (suspension, data export/deletion) are logged and, where feasible, notified to the affected org.
 
-## 11. Residual risks / to revisit
+## 11. Container & infrastructure hardening (Phase 1.5)
+
+- **Non-root containers.** Both the `app` and `worker` runtime images run as `node` (uid 1000), not root (`Dockerfile`).
+- **No secrets in images.** Build-time placeholders for `DATABASE_URL`/`REDIS_URL`/`AUTH_SECRET` are fixed, non-secret literals, never real values — see `docs/DEPLOYMENT.md` §8 for the full build/runtime separation.
+- **Resource limits** set per service (`docker-compose.yml` `deploy.resources.limits`) so one container can't starve the others on a shared VPS.
+- **Dependency vulnerability management:** `pnpm audit --audit-level high` runs in CI on every push/PR (`.github/workflows/ci.yml` `security` job); a known high-severity advisory in a transitive dependency was already found and pinned past (`docs/DECISION_LOG.md`, 2026-11-25).
+- **Least-privilege database access:** not yet differentiated — the app currently uses one database role for everything. Tracked as a gap; revisit once a dedicated migration-only vs. application role split is worth the operational overhead.
+- **Audit trails for deployment:** `GIT_SHA` baked into every image (`Dockerfile`, `docker-compose.yml` build args) so a running container's exact source commit is always identifiable (`scripts/diagnose-deployment.sh` §12) — see `docs/ROLLBACK.md`.
+- **Graceful shutdown:** the worker handles `SIGTERM`/`SIGINT`, finishing any in-flight job before disconnecting (`src/workers/index.ts`) rather than being killed mid-job on every redeploy.
+
+## 12. Residual risks / to revisit
 
 - Row-Level Security at the Postgres level is deferred to Phase 2 as a defence-in-depth layer, not a Phase 1 blocker, given consistent service-layer enforcement is the primary control.
 - WhatsApp Business / SMS provider-side data handling depends on third-party policies outside our direct control — documented as a dependency, not eliminated as a risk.

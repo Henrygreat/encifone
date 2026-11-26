@@ -1,24 +1,12 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
-import { redis } from "@/lib/redis";
+import { checkReadiness } from "@/lib/health";
 
+/**
+ * Kept for backward compatibility (same response shape as before
+ * /api/health/live and /api/health/ready existed) — equivalent to
+ * /api/health/ready. Prefer the split endpoints for new integrations.
+ */
 export async function GET() {
-  const checks: Record<string, "ok" | "error"> = { database: "error", redis: "error" };
-
-  try {
-    await prisma.$queryRaw`SELECT 1`;
-    checks.database = "ok";
-  } catch {
-    checks.database = "error";
-  }
-
-  try {
-    await redis.ping();
-    checks.redis = "ok";
-  } catch {
-    checks.redis = "error";
-  }
-
-  const healthy = Object.values(checks).every((status) => status === "ok");
-  return NextResponse.json({ status: healthy ? "ok" : "degraded", checks }, { status: healthy ? 200 : 503 });
+  const { ready, checks } = await checkReadiness();
+  return NextResponse.json({ status: ready ? "ok" : "degraded", checks }, { status: ready ? 200 : 503 });
 }
