@@ -61,6 +61,25 @@ fi
 violations=0
 checked=0
 
+# Deletion check: every migration ever recorded in the manifest must still
+# exist on disk. The modification-check loop below only walks directories
+# that are PRESENT on disk, so deleting an already-applied migration
+# entirely would otherwise pass silently — verified by manual test during
+# the 2026-11-26 master-first consolidation (see docs/DECISION_LOG.md).
+manifested_names=$(node -e "
+  const m = require('./$MANIFEST');
+  for (const k of Object.keys(m)) { if (k !== '_comment') console.log(k); }
+")
+while IFS= read -r name; do
+  [ -n "$name" ] || continue
+  if [ ! -f "$MIGRATIONS_DIR/$name/migration.sql" ]; then
+    echo "::error::Previously applied migration has been deleted: $name"
+    echo "  This migration is recorded in $MANIFEST but its file no longer exists."
+    echo "  Applied migrations must never be deleted — see CLAUDE.md rule 13."
+    violations=$((violations + 1))
+  fi
+done <<< "$manifested_names"
+
 for dir in "$MIGRATIONS_DIR"/*/; do
   name=$(basename "$dir")
   file="$dir/migration.sql"
