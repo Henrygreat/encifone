@@ -22,6 +22,10 @@ A feature is not complete unless its interface, backend, database, permissions, 
 | Accessibility | axe + manual | WCAG 2.1 AA checks on core app shell, dashboard, forms, portal |
 | Responsive | Playwright viewport matrix | Mobile breakpoints for client portal in particular |
 | Backup & restore | Scheduled drill | Restore a backup into a scratch environment and verify integrity, on a periodic cadence |
+| Migration integrity | CI (`scripts/check-migration-integrity.sh`) | Rejects any PR/push that modifies or deletes a Prisma migration file already on `master` — see CLAUDE.md rule 13 |
+| Docker Compose config | CI | `docker compose config` on both the base and local-merged files; asserts no `postgres` service and no published Redis port in the base file |
+| Multi-network binding | CI (`docker-multi-network-test` job) | Builds the real `app` image, attaches it to two Docker networks, asserts it's reachable through both — directly reproduces the production incident in `docs/DECISION_LOG.md` |
+| Production image smoke test | CI (`docker-smoke-test` job) | Builds and runs the actual `migrate`/`app`/`worker` Docker images (not the dev server) against ephemeral Postgres 18 + pgvector/Redis; runs a full register → sign-in → session → authenticated-API-call round trip; checks the worker's heartbeat file |
 
 ## 3. Per-phase acceptance
 

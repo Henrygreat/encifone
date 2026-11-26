@@ -35,6 +35,16 @@ Scope: connected the repository to GitHub (`main`/`develop` branching, CI), rebr
 - Production compose path (`docker-compose.yml` alone) defines no Postgres container and publishes no public port for Postgres/Redis.
 - Lint, typecheck, `prisma validate`, dependency audit, automated tests, and both local and Docker production builds all pass against PostgreSQL 18 + pgvector.
 
+### Phase 1.5 — Production Infrastructure Hardening & Deployment Reliability (implementation complete, pending approval/merge and live verification)
+Scope: permanently fix the root causes behind the production deployment issues this project had already hit (Docker build errors, Prisma P1001, Docker-network isolation, Redis env-var inconsistencies, missing runtime env vars, migration checksum mismatches, GitHub Actions failures, incorrect reverse-proxy domain assignment, 502s, missing `NEXTAUTH_URL`, Next.js container-hostname binding) — not workarounds. Split health checks, worker heartbeat monitoring, non-root containers + resource limits + `GIT_SHA` version tracking, a `.gitattributes` fix for a recurring migration-checksum/line-ending bug, centralised env-var classification, five new operational scripts, and CI additions (migration-integrity check, Compose config validation, a multi-network binding reproduction test, and a production-image smoke test). Full record: `docs/DECISION_LOG.md`, `docs/IMPLEMENTATION_STATUS.md`. Operational docs: `docs/DEPLOYMENT_RUNBOOK.md`, `docs/TROUBLESHOOTING.md`, `docs/ROLLBACK.md`.
+**Acceptance criteria:**
+- Next.js confirmed binding to `0.0.0.0:3000` (via `/proc/net/tcp`), not a single interface — both inside a locally-built container and reproduced/asserted in CI across two attached Docker networks.
+- A full register → sign in → session → authenticated-API-call round trip passes locally and in CI, against the actual production Docker images (not the dev server) — confirming the `NEXTAUTH_URL`/`secret` fixes.
+- `scripts/check-migration-integrity.sh` demonstrated to both pass on a clean state and fail on a deliberately tampered commit; wired into CI.
+- Lint, typecheck, dependency audit, automated tests, Compose config validation, the multi-network test, and the production-image smoke test all pass in CI.
+- No previously-applied migration modified; no production data touched; nothing merged to `master`/`develop` or deployed without explicit approval.
+- Everything requiring the live Coolify/production environment to confirm (database network-isolation fix, domain-assignment behaviour after removing the app's published port, actual zero-downtime rollback, branch-protection/deploy-trigger configuration) is explicitly listed as pending in `docs/IMPLEMENTATION_STATUS.md`, not claimed as done.
+
 ### Phase 2 — Intelligent CRM, Sales Pipeline & Client Acquisition
 Decomposed into subphases (reconciled 2026-11-26 — see `docs/DECISION_LOG.md`), each on its own `feature/phase-2.N-*` branch, merged to `develop` only once its own acceptance criteria pass. Original single-phase scope ("Lead/Contact/Company CRUD + CSV import, one pipeline + Kanban, Proposal builder, e-signature, Stripe test-mode deposit") is preserved — this is that same scope broken down to match the detail level requested at kickoff, plus two deliberate, narrow pull-forwards from Phase 3 (noted below).
 

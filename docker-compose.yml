@@ -34,31 +34,69 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+    deploy:
+      resources:
+        # Conservative starting point for a modest VPS (docs/MASTER_ROADMAP.md
+        # §5) — tune based on actual usage, not a hard requirement.
+        limits: { cpus: "0.50", memory: 256M }
 
   migrate:
     build:
       context: .
       target: deps
+      args:
+        # Set GIT_SHA as an env var wherever `docker compose build` runs
+        # (Coolify or CI) to have it picked up here automatically — falls
+        # back to "unknown" otherwise. See docs/ROLLBACK.md.
+        GIT_SHA: ${GIT_SHA:-unknown}
     environment:
       # Only what `prisma migrate deploy` actually reads — nothing else.
       DATABASE_URL: ${DATABASE_URL}
     command: ["node_modules/.bin/prisma", "migrate", "deploy"]
     restart: "no"
+    deploy:
+      resources:
+        limits: { cpus: "0.50", memory: 512M }
 
   app:
     build:
       context: .
       target: app
+      args:
+        GIT_SHA: ${GIT_SHA:-unknown}
     restart: unless-stopped
+    deploy:
+      resources:
+        limits: { cpus: "1.00", memory: 1024M }
     environment:
+      NODE_ENV: production
+      # Belt-and-suspenders alongside the Dockerfile's own ENV — see
+      # docs/DECISION_LOG.md for the production incident this fixes.
+      HOSTNAME: "0.0.0.0"
+      PORT: ${PORT:-3000}
       DATABASE_URL: ${DATABASE_URL}
       REDIS_URL: redis://redis:6379 # internal service name, constant across environments — never from ambient env
       AUTH_SECRET: ${AUTH_SECRET}
       APP_URL: ${APP_URL}
+      # Deliberately NOT set here even with a `:-` fallback — Compose would
+      # still inject the key with an empty string when unset, which fails
+      # our env schema's z.string().url() validation (empty string isn't
+      # "unset" to Zod). src/lib/env.ts's ensureNextAuthUrl() defaults it
+      # from APP_URL in code instead. Only uncomment/set this if NEXTAUTH_URL
+      # must genuinely differ from APP_URL.
+      # NEXTAUTH_URL: ${NEXTAUTH_URL}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
-    ports:
-      - "3000:3000"
+    # No host port published here, deliberately — see docs/ROLLBACK.md and
+    # docs/DEPLOYMENT.md §5. Traefik reaches this container over Coolify's
+    # own Docker network by container name/port, not via a published host
+    # port (confirmed: the production incident this project hit showed
+    # Traefik already routing that way). Coolify's own docs state
+    # zero-downtime blue-green deploys/rollbacks require a health check
+    # (this image has one) AND no port mapping — with one published, a
+    # new container can't bind the same host port until the old one is
+    # removed first, forcing a brief gap instead of a clean cutover. Local
+    # dev still gets host access via docker-compose.local.yml's override.
     depends_on:
       redis:
         condition: service_healthy
@@ -69,7 +107,12 @@ services:
     build:
       context: .
       target: worker
+      args:
+        GIT_SHA: ${GIT_SHA:-unknown}
     restart: unless-stopped
+    deploy:
+      resources:
+        limits: { cpus: "0.50", memory: 512M }
     environment:
       DATABASE_URL: ${DATABASE_URL}
       REDIS_URL: redis://redis:6379 # internal service name, constant across environments — never from ambient env
