@@ -187,8 +187,17 @@ Full record: `docs/DECISION_LOG.md`. See `docs/MASTER_ROADMAP.md` "Phase 2A" for
 - **New shadcn primitives:** `tabs`, `popover`, `checkbox`, `switch`, `progress`, `alert`, `scroll-area`, `calendar`.
 - **Validated:** lint, typecheck, `prisma validate`, migration-integrity, local production build all pass clean.
 
+### Milestone B — CRM foundation (Contacts & Companies complete; Leads not yet started)
+- **Capabilities:** `Capability.CRM_VIEW`/`CRM_MANAGE`/`CRM_DELETE` added to `src/core/permissions.ts`, wired into `ROLE_CAPABILITIES` for all 14 roles (sales-facing roles get view+manage, `SALES_MANAGER`/`ORGANISATION_ADMIN`/owner/platform-admin additionally get delete; client/contractor roles get none). Unit tests added.
+- **Service layer** (`src/modules/crm/service.ts`, `schemas.ts`, `constants.ts`): `listContacts`/`getContact`/`createContact`/`updateContact`/`archiveContact` and the equivalent for `Company` — every function takes the already-verified `ActiveMembership` first, checks `roleHasCapability`, scopes every query by `organisationId`, verifies a cross-tenant `companyId`/`ownerId`/`parentCompanyId` is rejected (not just ignored) before linking it to a record, and writes an audit log entry. Archive is a soft delete (`status: ARCHIVED` + `deletedAt`) — no hard delete exists yet (CRM_DELETE is reserved for that, not yet built).
+- **API routes:** `app/api/v1/{contacts,companies}/route.ts` (list with search/status/owner/company/tag filters + pagination, create) and `[id]/route.ts` (get, update, archive-via-DELETE). New `parseQuery` helper and a shared `NotFoundError` (→ 404) added to `src/lib/api.ts`.
+- **UI:** `/contacts` and `/companies` — searchable (debounced), filterable, paginated data tables with skeleton loading and an empty state (never fabricated rows), a quick-create dialog (React Hook Form + Zod, re-using the server schemas' shape), status badges, avatar initials, and company-contact/opportunity counts.
+- **Tests:** `tests/integration/crm-tenant-isolation.test.ts` — cross-org list/get rejection via a direct API-equivalent call (not just UI-level), cross-org `companyId`/`ownerId` linking rejection, permission denial for a role with no CRM capability, archive-is-soft-delete, audit log written on update. 17/17 tests passing (9 original + 8 new).
+- **Verified live, not just typechecked:** ran the dev server and exercised the actual HTTP flow — register → sign in → create company → create a contact linked to it → search finds it → a second organisation's contact list returns empty (cannot see the first org's data) → both `/contacts` and `/companies` pages render 200 for an authenticated user.
+- **Deliberately deferred within Milestone B/C** (not silently dropped — flagged so scope stays honest): contact/company detail pages with a full profile + activity timeline, tags UI, CSV import/export, duplicate detection/merge, bulk operations, communication-history integration. These are real, substantial features queued as the next slices, not abandoned.
+
 ### Not yet started
-Milestones B (CRM services/API/UI for contacts/companies/leads), C (pipeline/Kanban/activities), D (real-data Bento dashboard, landing-page 3D hero, dashboard AI-orb widget, auth-page visuals), E (full QA pass, `docs/CRM_USER_GUIDE.md`, final docs sweep).
+Leads (within Milestone B), Milestone C (pipeline/Kanban/activities), Milestone D (real-data Bento dashboard, landing-page 3D hero, dashboard AI-orb widget, auth-page visuals), Milestone E (full QA pass, `docs/CRM_USER_GUIDE.md`, final docs sweep).
 
 ## Known limitations
 
