@@ -13,7 +13,7 @@ EncifOne unifies CRM, proposals/contracts, client portals, project & service del
 
 ## Status
 
-**Phase 1 — Foundations & scaffolding** and **Phase 1.1 — GitHub integration, branding & database standardisation (PostgreSQL 18 + pgvector)** are both complete: auth, organisations, multi-org membership/switching, RBAC, and the base app shell are implemented and runnable on the approved database standard. See `docs/IMPLEMENTATION_STATUS.md` for what's built vs. not, and `docs/MASTER_ROADMAP.md` for what's next. **Phase 2 is on hold pending explicit approval.**
+**Phase 1 — Foundations & scaffolding**, **Phase 1.1 — GitHub integration, branding & database standardisation (PostgreSQL 18 + pgvector)**, and **Phase 1.5 — Production infrastructure hardening** are all complete: auth, organisations, multi-org membership/switching, RBAC, and the base app shell are implemented and runnable on the approved database standard. **Phase 2A — CRM & sales core (Milestones A–D: contacts/companies/leads with conversion, sales pipeline with a drag-and-drop Kanban board, activities, a real-data dashboard, and a premium UI/UX transformation including a React Three Fiber hero/AI-orb) is also complete** — see `docs/CRM_USER_GUIDE.md` for how to use it. See `docs/IMPLEMENTATION_STATUS.md` for the full build record and what's explicitly deferred, and `docs/MASTER_ROADMAP.md` for what's next.
 
 ## Documentation map
 
@@ -28,6 +28,7 @@ EncifOne unifies CRM, proposals/contracts, client portals, project & service del
 | [`docs/AI_ARCHITECTURE.md`](./docs/AI_ARCHITECTURE.md) | Provider-agnostic AI service, agent framework, autonomy levels |
 | [`docs/SECURITY.md`](./docs/SECURITY.md) | Threat model, tenant isolation, AI security, compliance posture |
 | [`docs/DESIGN_SYSTEM.md`](./docs/DESIGN_SYSTEM.md) | Visual language, components, theming |
+| [`docs/CRM_USER_GUIDE.md`](./docs/CRM_USER_GUIDE.md) | How to use what's built so far: contacts, companies, leads, pipeline, dashboard |
 | [`docs/MASTER_ROADMAP.md`](./docs/MASTER_ROADMAP.md) | MVP scope, vertical slice, phased roadmap, acceptance criteria |
 | [`docs/DEPLOYMENT.md`](./docs/DEPLOYMENT.md) | Infra, Docker/Compose, CI/CD, backups |
 | [`docs/TESTING.md`](./docs/TESTING.md) | Test strategy per layer |

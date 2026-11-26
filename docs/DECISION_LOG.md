@@ -4,6 +4,28 @@ Lightweight architectural decision record. Each entry: what was decided, why, an
 
 ---
 
+## 2026-11-26 — Phase 2A complete: CRM & sales core, Milestones A–E
+
+**Decision/record:** Phase 2A (reconciled 2.1+2.2+a new Activities module, plus the full premium UI/UX transformation — see the Milestone A entry below) is complete across all 5 milestones, each CI-confirmed on `master` before the next began:
+
+- **A — design foundation:** schema additions (`Pipeline`/`PipelineStage`/`Opportunity`/`Activity`), design system v2, navigation redesign, Bento/React-Three-Fiber architecture. (Full detail in the entry immediately below.)
+- **B — CRM foundation:** `src/modules/crm/` service+API+UI for Contacts, Companies, and Leads (with transactional conversion into Contact/Company).
+- **C — sales pipeline:** `src/modules/sales/` service+API, a real drag-and-drop Kanban board (`/deals`), and `src/modules/activities/` (calls/meetings/notes/tasks).
+- **D — dashboard & 3D:** `src/modules/dashboard/` real-data aggregation wired into `/dashboard`, a landing-page React Three Fiber hero scene, and a dashboard AI-orb widget.
+- **E — QA & docs:** full validation re-run from a clean state, `docs/CRM_USER_GUIDE.md`, documentation consistency sweep.
+
+**Two real bugs found and fixed during this build, each caught before shipping further on top of them, not after:**
+1. `moveOpportunity`'s original contract only ever set the dragged card's own `position` — nothing reindexed its siblings in the destination column, which would have left multiple cards sharing the same position with no well-defined order after repeated drags. Caught before any UI was built against it; fixed by taking the destination column's full `orderedIds` and reindexing every card in one transaction.
+2. A Recharts tooltip `formatter` typing mismatch on the lead-source chart — caught by `tsc`, fixed by widening the parameter type rather than asserting it away.
+
+**Process note:** twice during this phase, a commit landed on `master` that wasn't produced by any `git commit` call in this working session (see the entry below) — in one case capturing the Recharts bug above before it was fixed. CI's `lint-and-typecheck` job caught it and correctly blocked `build`/`deploy` from running on that commit; the master-first CI-gated design contained the risk exactly as intended even though the commit itself skipped this session's own pre-commit discipline.
+
+**Verification standard held throughout:** every slice was validated locally (lint/typecheck/build/tests/migration-integrity) *and* exercised against a live dev server via real HTTP calls (register → sign in → the actual feature flow) before being committed — not just typechecked. Where something genuinely couldn't be verified without a browser (pointer-driven drag-and-drop, 3D interaction, dark-mode/responsive visual rendering), that limitation is stated plainly in `docs/IMPLEMENTATION_STATUS.md` rather than glossed over.
+
+**Deferred, not dropped** (see `docs/CRM_USER_GUIDE.md` §7 for the user-facing version): contact/company/opportunity detail pages, CSV import/export, duplicate detection/merge, bulk operations, a list/table view for the pipeline, real AI functionality anywhere in the CRM, auth-page visual polish.
+
+---
+
 ## 2026-11-26 — Observed: an external process is auto-committing working-directory state to `master`
 
 **Observation, not a decision:** during Phase 2A Milestone D, two commits (`6ced885` "phase 2", `69f5fc2` "feat: Phase 2 CRM and modern dashboard enhancements") appeared on `origin/master`, authored under the repository's configured git identity, that were not the result of any `git commit` call made in this working session. One of them (`69f5fc2`) captured an in-progress, not-yet-fixed file (a Recharts typing error this session hadn't finished correcting yet) and pushed it straight to `master`. `.claude/scheduled_tasks.lock` — Claude Code's own session-local bookkeeping file, never project content — was also committed this way once.
