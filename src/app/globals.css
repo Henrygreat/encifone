@@ -14,6 +14,10 @@
    `dark:` utility class in the codebase keeps working unchanged regardless
    of which of the two dark themes is active. */
 @custom-variant dark (&:is(.aurora *, .professional-dark *));
+/* Scopes an effect to the Aurora theme only (glassmorphism, gradient
+   borders, ambient glow) — Professional Dark/Light deliberately don't
+   get these, per the brief's own theme requirements. */
+@custom-variant aurora (&:is(.aurora *));
 
 @theme inline {
   --color-background: var(--background);

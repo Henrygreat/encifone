@@ -19,13 +19,15 @@ function StaticOrbFallback() {
   );
 }
 
-/** Small decorative widget for the dashboard's AI insights panel — see
- * src/components/three/scenes/ai-orb-scene.tsx for why it's intentionally
- * tiny and purely atmospheric. */
-export function AiOrb({ className }: { className?: string }) {
+/** The EncifOne Intelligence Core — used both as the dashboard hero's
+ * centrepiece and (smaller) elsewhere. `active` is a real, data-driven
+ * state (whether this org has AI configured and enabled — see
+ * src/lib/ai-gateway), never a cosmetic default: the brief is explicit
+ * that AI must never appear to be "working" when none is configured. */
+export function AiOrb({ className, active = true }: { className?: string; active?: boolean }) {
   return (
     <SceneCanvas className={className} fallback={<StaticOrbFallback />} camera={{ position: [0, 0, 3], fov: 40 }}>
-      <AiOrbScene />
+      <AiOrbScene active={active} />
     </SceneCanvas>
   );
 }

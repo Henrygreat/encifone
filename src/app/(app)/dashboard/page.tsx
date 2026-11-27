@@ -6,15 +6,20 @@ import { formatMoneyMinor } from "@/lib/money";
 import { getDashboardSummary } from "@/modules/dashboard/service";
 import { getActionCentreItems, type ActionCentreSeverity } from "@/modules/intelligence/action-centre";
 import { getSalesVelocityMetrics } from "@/modules/sales/analytics";
+import { getAIConfig } from "@/modules/ai/service";
+import { isAIConfigured } from "@/lib/ai-gateway";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { BentoCard, BentoEmptyState, BentoGrid } from "@/components/bento/bento-grid";
+import { MetricCard } from "@/components/ui/metric-card";
+import { AttentionCard } from "@/components/ui/attention-card";
+import { AIInsightCard } from "@/components/ui/ai-insight-card";
+import { DashboardHero, HeroQuickAction } from "@/components/dashboard/dashboard-hero";
 import { LeadSourceChart } from "@/components/dashboard/lead-source-chart";
 import { PipelineStageChart } from "@/components/dashboard/pipeline-stage-chart";
-import { AiOrb } from "@/components/three/ai-orb";
 import { formatEnumLabel } from "@/lib/utils";
-import { UserPlus, Target, KanbanSquare } from "lucide-react";
+import { UserPlus, Target, KanbanSquare, Users, Building2, PiggyBank, TrendingUp, Award } from "lucide-react";
 
 const PLANNED_WIDGETS: { title: string; availableFrom: string }[] = [
   { title: "Monthly recurring revenue", availableFrom: "Phase 4" },
@@ -22,46 +27,20 @@ const PLANNED_WIDGETS: { title: string; availableFrom: string }[] = [
   { title: "AI executive briefing", availableFrom: "Phase 9" },
 ];
 
-type ModuleKey = "overview" | "crm" | "sales" | "work" | "intelligence" | "admin";
-
-function Kpi({
-  label,
-  value,
-  accentModule,
-  href,
-}: {
-  label: string;
-  value: string | number;
-  accentModule?: ModuleKey;
-  href?: string;
-}) {
-  const content = (
-    <BentoCard colSpan={3} accentModule={accentModule}>
-      <span className="text-sm text-muted-foreground">{label}</span>
-      <span className="text-3xl font-semibold tracking-tight text-foreground">{value}</span>
-    </BentoCard>
-  );
-  return href ? <Link href={href}>{content}</Link> : content;
-}
-
-function greeting(hour: number) {
-  if (hour < 5) return "Working late";
-  if (hour < 12) return "Good morning";
-  if (hour < 18) return "Good afternoon";
-  return "Good evening";
-}
-
 export default async function DashboardPage() {
   const acting = await requireActiveMembership();
 
-  const [session, organisation, memberCount, summary, actionCentreItems, velocity] = await Promise.all([
-    getServerAuthSession(),
-    prisma.organisation.findUniqueOrThrow({ where: { id: acting.organisationId } }),
-    prisma.membership.count({ where: { organisationId: acting.organisationId, status: "ACTIVE" } }),
-    getDashboardSummary(acting),
-    getActionCentreItems(acting),
-    getSalesVelocityMetrics(acting),
-  ]);
+  const [session, organisation, memberCount, summary, actionCentreItems, velocity, aiConfig, aiEnabled] =
+    await Promise.all([
+      getServerAuthSession(),
+      prisma.organisation.findUniqueOrThrow({ where: { id: acting.organisationId } }),
+      prisma.membership.count({ where: { organisationId: acting.organisationId, status: "ACTIVE" } }),
+      getDashboardSummary(acting),
+      getActionCentreItems(acting),
+      getSalesVelocityMetrics(acting),
+      getAIConfig(acting),
+      isAIConfigured(acting.organisationId),
+    ]);
 
   const stageDurationsWithDeals = velocity.stageDurations.filter((s) => s.segmentCount > 0);
   const maxStageDays = Math.max(1, ...stageDurationsWithDeals.map((s) => s.avgDays ?? 0));
@@ -71,75 +50,60 @@ export default async function DashboardPage() {
   const sortedActionItems = [...actionCentreItems].sort(
     (a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity]
   );
-  const SEVERITY_BADGE_VARIANT: Record<ActionCentreSeverity, "destructive" | "secondary" | "outline"> = {
-    urgent: "destructive",
-    warning: "secondary",
-    info: "outline",
-  };
+  const urgentCount = sortedActionItems.filter((i) => i.severity === "urgent").length;
 
   return (
     <div className="flex flex-col gap-6 p-6">
       <BentoGrid>
-        {/* Personalised welcome hero */}
-        <BentoCard colSpan={8} rowSpan={2} variant="glass" className="justify-between">
-          <div className="flex flex-col gap-1">
-            <p className="text-sm font-medium" style={{ color: "var(--module-sales)" }}>
-              {greeting(new Date().getHours())}, {firstName}
-            </p>
-            <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
-              {organisation.name}
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              {memberCount} active member{memberCount === 1 ? "" : "s"} · {organisation.defaultCurrency} ·
-              building since{" "}
-              {organisation.createdAt.toLocaleDateString(undefined, { year: "numeric", month: "short" })}
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Button asChild size="sm" style={{ background: "var(--module-crm)", color: "#060B14" }}>
-              <Link href="/contacts">
-                <UserPlus className="size-4" /> New contact
-              </Link>
-            </Button>
-            <Button asChild size="sm" variant="outline">
-              <Link href="/leads">
-                <Target className="size-4" /> New lead
-              </Link>
-            </Button>
-            <Button asChild size="sm" variant="outline">
-              <Link href="/deals">
-                <KanbanSquare className="size-4" /> New deal
-              </Link>
-            </Button>
-          </div>
-        </BentoCard>
-
-        {/* Compact AI intelligence visualisation — the one WebGL canvas on
-            this page, per docs/DESIGN_SYSTEM.md §9. */}
-        <BentoCard colSpan={4} rowSpan={2} accentModule="intelligence" className="items-center justify-center text-center">
-          <AiOrb className="size-24" />
-          <p className="text-sm font-medium text-foreground">AI Intelligence Core</p>
-          <p className="text-xs text-muted-foreground">Not yet configured — see below</p>
-        </BentoCard>
+        <DashboardHero
+          firstName={firstName}
+          organisationName={organisation.name}
+          summaryLine={`${memberCount} active member${memberCount === 1 ? "" : "s"} · ${organisation.defaultCurrency} · building since ${organisation.createdAt.toLocaleDateString(undefined, { year: "numeric", month: "short" })}`}
+          aiActive={aiEnabled}
+          aiStatusLabel={aiEnabled ? `Active — ${aiConfig.provider ?? "configured"}` : "Not yet configured"}
+          quickActions={
+            <>
+              <HeroQuickAction href="/contacts" icon={UserPlus} primary>
+                New contact
+              </HeroQuickAction>
+              <HeroQuickAction href="/leads" icon={Target}>
+                New lead
+              </HeroQuickAction>
+              <HeroQuickAction href="/deals" icon={KanbanSquare}>
+                New deal
+              </HeroQuickAction>
+            </>
+          }
+        />
 
         {/* Real business KPIs */}
-        <Kpi label="Pipeline value" value={formatMoneyMinor(summary.pipelineValueMinor, "GBP")} accentModule="sales" />
-        <Kpi
+        <MetricCard
+          label="Pipeline value"
+          value={formatMoneyMinor(summary.pipelineValueMinor, "GBP")}
+          icon={PiggyBank}
+          accentModule="sales"
+          tooltip="Sum of valueMinor across every open opportunity."
+        />
+        <MetricCard
           label="Weighted forecast"
           value={formatMoneyMinor(summary.weightedForecastMinor, "GBP")}
+          icon={TrendingUp}
           accentModule="sales"
+          tooltip="Each open deal's value × its probability (own override, or its stage's default)."
         />
-        <Kpi
+        <MetricCard
           label="Lead conversion"
           value={summary.conversionRate === null ? "—" : `${Math.round(summary.conversionRate * 100)}%`}
+          icon={Award}
           accentModule="crm"
+          tooltip="Converted leads ÷ total non-archived leads."
         />
-        <Kpi label="Contacts" value={summary.totalContacts} accentModule="crm" href="/contacts" />
+        <MetricCard label="Contacts" value={summary.totalContacts} icon={Users} accentModule="crm" href="/contacts" />
 
-        <Kpi label="Companies" value={summary.totalCompanies} accentModule="crm" href="/companies" />
-        <Kpi label="Active leads" value={summary.activeLeads} accentModule="crm" href="/leads" />
-        <Kpi label="Open deals" value={summary.openOpportunities} accentModule="sales" href="/deals" />
-        <Kpi label="Won deals" value={summary.wonOpportunities} accentModule="sales" />
+        <MetricCard label="Companies" value={summary.totalCompanies} icon={Building2} accentModule="crm" href="/companies" />
+        <MetricCard label="Active leads" value={summary.activeLeads} icon={Target} accentModule="crm" href="/leads" />
+        <MetricCard label="Open deals" value={summary.openOpportunities} icon={KanbanSquare} accentModule="sales" href="/deals" />
+        <MetricCard label="Won deals" value={summary.wonOpportunities} icon={Award} accentModule="sales" />
 
         {/* Sales performance */}
         <BentoCard colSpan={6} rowSpan={2} accentModule="sales">
@@ -192,11 +156,7 @@ export default async function DashboardPage() {
         <BentoCard colSpan={4} rowSpan={2} accentModule="work">
           <div className="flex items-center justify-between">
             <span className="text-sm font-medium text-foreground">Needs your attention</span>
-            {sortedActionItems.filter((i) => i.severity === "urgent").length > 0 && (
-              <Badge variant="destructive">
-                {sortedActionItems.filter((i) => i.severity === "urgent").length} urgent
-              </Badge>
-            )}
+            {urgentCount > 0 && <Badge variant="destructive">{urgentCount} urgent</Badge>}
           </div>
           {sortedActionItems.length === 0 ? (
             <BentoEmptyState title="Nothing urgent" description="You're on top of your pipeline and follow-ups." />
@@ -204,24 +164,11 @@ export default async function DashboardPage() {
             <ul className="flex flex-col gap-1.5 overflow-y-auto">
               {sortedActionItems.slice(0, 8).map((item) => (
                 <li key={item.id}>
-                  <Link
-                    href={item.href}
-                    className="flex items-center justify-between gap-2 rounded-md px-1 py-0.5 text-sm hover:bg-muted"
-                  >
-                    <span className="flex flex-col truncate">
-                      <span className="truncate text-foreground">{item.title}</span>
-                      <span className="truncate text-xs text-muted-foreground">{item.detail}</span>
-                    </span>
-                    <Badge variant={SEVERITY_BADGE_VARIANT[item.severity]} className="shrink-0">
-                      {item.severity}
-                    </Badge>
-                  </Link>
+                  <AttentionCard item={item} />
                 </li>
               ))}
               {sortedActionItems.length > 8 && (
-                <li className="pt-1 text-xs text-muted-foreground">
-                  +{sortedActionItems.length - 8} more
-                </li>
+                <li className="pt-1 text-xs text-muted-foreground">+{sortedActionItems.length - 8} more</li>
               )}
             </ul>
           )}
@@ -318,16 +265,14 @@ export default async function DashboardPage() {
           )}
         </BentoCard>
 
-        {/* AI insights — where configured */}
+        {/* AI insights — real configuration state, never a fabricated
+            summary or implied activity when AI isn't enabled. */}
         <BentoCard colSpan={12} accentModule="intelligence">
           <div className="flex items-center justify-between">
             <span className="text-sm font-medium text-foreground">AI insights</span>
-            <Badge variant="outline">Not yet configured</Badge>
+            <Badge variant={aiEnabled ? "default" : "outline"}>{aiEnabled ? "Enabled" : "Not yet configured"}</Badge>
           </div>
-          <BentoEmptyState
-            title="No AI provider configured"
-            description="Contact summaries, lead prioritisation, and next-best-action suggestions will appear here once an AI provider is connected (Phase 2.8/5) — never fabricated figures in the meantime."
-          />
+          <AIInsightCard configured={aiEnabled} provider={aiConfig.provider} />
         </BentoCard>
       </BentoGrid>
 

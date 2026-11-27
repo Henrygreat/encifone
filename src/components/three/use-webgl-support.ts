@@ -57,3 +57,24 @@ function subscribeReducedMotion(callback: () => void): () => void {
 export function usePrefersReducedMotion(): boolean {
   return useSyncExternalStore(subscribeReducedMotion, getReducedMotionSnapshot, getServerReducedMotionSnapshot);
 }
+
+function getPageVisibleSnapshot(): boolean {
+  return document.visibilityState === "visible";
+}
+
+function getServerPageVisibleSnapshot(): boolean {
+  return true;
+}
+
+function subscribePageVisible(callback: () => void): () => void {
+  document.addEventListener("visibilitychange", callback);
+  return () => document.removeEventListener("visibilitychange", callback);
+}
+
+/** Backs every 3D scene's `frameloop="never"` pause when the tab is
+ * backgrounded (docs/DESIGN_SYSTEM.md §7's "pause off-screen/hidden"
+ * requirement) — a render loop idling on a hidden tab is pure wasted GPU/
+ * battery for a purely decorative scene. */
+export function usePageVisible(): boolean {
+  return useSyncExternalStore(subscribePageVisible, getPageVisibleSnapshot, getServerPageVisibleSnapshot);
+}

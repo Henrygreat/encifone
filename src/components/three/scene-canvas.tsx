@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { Canvas, type CanvasProps } from "@react-three/fiber";
-import { useWebGLSupport, usePrefersReducedMotion } from "./use-webgl-support";
+import { useWebGLSupport, usePrefersReducedMotion, usePageVisible } from "./use-webgl-support";
 import { SceneErrorBoundary } from "./scene-error-boundary";
 
 export interface SceneCanvasProps extends Omit<CanvasProps, "dpr" | "fallback"> {
@@ -28,6 +28,7 @@ export interface SceneCanvasProps extends Omit<CanvasProps, "dpr" | "fallback"> 
 export function SceneCanvas({ fallback, className, children, ...canvasProps }: SceneCanvasProps) {
   const webglSupported = useWebGLSupport();
   const prefersReducedMotion = usePrefersReducedMotion();
+  const pageVisible = usePageVisible();
 
   if (webglSupported !== true || prefersReducedMotion) {
     return <div className={className}>{fallback}</div>;
@@ -39,6 +40,9 @@ export function SceneCanvas({ fallback, className, children, ...canvasProps }: S
         className={className}
         dpr={[1, Math.min(typeof window !== "undefined" ? window.devicePixelRatio : 1, 2)]}
         gl={{ antialias: true, powerPreference: "low-power" }}
+        // Idling a render loop on a backgrounded tab is pure wasted GPU/
+        // battery for a decorative scene — see usePageVisible.
+        frameloop={pageVisible ? "always" : "never"}
         onCreated={({ gl }) => {
           gl.domElement.addEventListener("webglcontextlost", (event) => {
             event.preventDefault();
