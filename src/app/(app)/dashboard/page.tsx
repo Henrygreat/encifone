@@ -90,6 +90,15 @@ export default async function DashboardPage() {
           firstName={firstName}
           organisationName={organisation.name}
           summaryLine={`${memberCount} active member${memberCount === 1 ? "" : "s"} · ${organisation.defaultCurrency} workspace`}
+          highlights={[
+            { label: "Organisation", value: organisation.name },
+            {
+              label: "Workspace age",
+              value: organisation.createdAt.toLocaleDateString(undefined, { month: "short", year: "numeric" }),
+            },
+            { label: "Currency", value: organisation.defaultCurrency },
+            { label: "Team members", value: `${memberCount}` },
+          ]}
           aiState={aiStatus.state}
           aiStatusLabel={aiStatus.label}
           quickActions={
@@ -107,33 +116,6 @@ export default async function DashboardPage() {
           }
         />
 
-        <BentoCard colSpan={4} accentModule="overview" className="min-h-[210px] gap-3">
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-medium text-foreground">Business overview</span>
-            <ShieldCheck className="size-4 text-muted-foreground" />
-          </div>
-          <div className="grid grid-cols-1 gap-2 text-sm min-[460px]:grid-cols-2">
-            <div className="rounded-lg border border-border/70 bg-muted/40 p-3">
-              <p className="text-xs text-muted-foreground">Organisation</p>
-              <p className="mt-1 truncate font-medium text-foreground">{organisation.name}</p>
-            </div>
-            <div className="rounded-lg border border-border/70 bg-muted/40 p-3">
-              <p className="text-xs text-muted-foreground">Workspace age</p>
-              <p className="mt-1 font-medium text-foreground">
-                {organisation.createdAt.toLocaleDateString(undefined, { month: "short", year: "numeric" })}
-              </p>
-            </div>
-            <div className="rounded-lg border border-border/70 bg-muted/40 p-3">
-              <p className="text-xs text-muted-foreground">Currency</p>
-              <p className="mt-1 font-medium text-foreground">{organisation.defaultCurrency}</p>
-            </div>
-            <div className="rounded-lg border border-border/70 bg-muted/40 p-3">
-              <p className="text-xs text-muted-foreground">Team members</p>
-              <p className="mt-1 font-medium text-foreground">{memberCount}</p>
-            </div>
-          </div>
-        </BentoCard>
-
         {/* Row 2 */}
         <MetricCard
           key="pipeline-value"
@@ -142,6 +124,7 @@ export default async function DashboardPage() {
           icon={PiggyBank}
           accentModule="sales"
           colSpan={4}
+          children={<span className="sr-only" data-testid="kpi-pipeline-value" />}
           tooltip="Sum of valueMinor across every open opportunity."
         />
         <MetricCard
@@ -151,6 +134,7 @@ export default async function DashboardPage() {
           icon={TrendingUp}
           accentModule="sales"
           colSpan={4}
+          children={<span className="sr-only" data-testid="kpi-weighted-forecast" />}
           tooltip="Each open deal value multiplied by its probability."
         />
         <MetricCard
@@ -160,49 +144,61 @@ export default async function DashboardPage() {
           icon={Award}
           accentModule="crm"
           colSpan={4}
+          children={<span className="sr-only" data-testid="kpi-lead-conversion" />}
           tooltip="Converted leads divided by total non-archived leads."
         />
 
         {/* Row 3 */}
-        <MetricCard
-          key="contacts"
-          label="Contacts"
-          value={summary.totalContacts}
-          icon={Users}
-          accentModule="crm"
-          href="/contacts"
-          colSpan={3}
-        />
-        <MetricCard
-          key="companies"
-          label="Companies"
-          value={summary.totalCompanies}
-          icon={Building2}
-          accentModule="crm"
-          href="/companies"
-          colSpan={3}
-        />
-        <MetricCard
-          key="active-leads"
-          label="Active leads"
-          value={summary.activeLeads}
-          icon={Target}
-          accentModule="crm"
-          href="/leads"
-          colSpan={3}
-        />
-        <MetricCard
-          key="open-deals"
-          label="Open deals"
-          value={summary.openOpportunities}
-          icon={KanbanSquare}
-          accentModule="sales"
-          href="/deals"
-          colSpan={3}
-        />
+        <BentoCard colSpan={6} accentModule="crm" className="min-h-[280px]" data-testid="operational-kpis-card">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium text-foreground">Operational KPIs</span>
+            <Badge variant="outline">Live counts</Badge>
+          </div>
+          <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 sm:grid-cols-2 sm:grid-rows-2">
+            <Link
+              href="/contacts"
+              className="rounded-lg border border-border/70 bg-muted/35 p-3 transition-colors hover:bg-muted/55"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <span className="text-sm text-muted-foreground">Contacts</span>
+                <Users className="size-4 shrink-0 text-[var(--module-crm)]" />
+              </div>
+              <p className="mt-2 text-2xl font-semibold leading-none text-foreground tabular-nums">{summary.totalContacts}</p>
+            </Link>
+            <Link
+              href="/companies"
+              className="rounded-lg border border-border/70 bg-muted/35 p-3 transition-colors hover:bg-muted/55"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <span className="text-sm text-muted-foreground">Companies</span>
+                <Building2 className="size-4 shrink-0 text-[var(--module-crm)]" />
+              </div>
+              <p className="mt-2 text-2xl font-semibold leading-none text-foreground tabular-nums">{summary.totalCompanies}</p>
+            </Link>
+            <Link
+              href="/leads"
+              className="rounded-lg border border-border/70 bg-muted/35 p-3 transition-colors hover:bg-muted/55"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <span className="text-sm text-muted-foreground">Active leads</span>
+                <Target className="size-4 shrink-0 text-[var(--module-crm)]" />
+              </div>
+              <p className="mt-2 text-2xl font-semibold leading-none text-foreground tabular-nums">{summary.activeLeads}</p>
+            </Link>
+            <Link
+              href="/deals"
+              className="rounded-lg border border-border/70 bg-muted/35 p-3 transition-colors hover:bg-muted/55"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <span className="text-sm text-muted-foreground">Open deals</span>
+                <KanbanSquare className="size-4 shrink-0 text-[var(--module-sales)]" />
+              </div>
+              <p className="mt-2 text-2xl font-semibold leading-none text-foreground tabular-nums">{summary.openOpportunities}</p>
+            </Link>
+          </div>
+        </BentoCard>
 
-        {/* Row 4 */}
-        <BentoCard colSpan={6} accentModule="sales">
+        <BentoCard colSpan={6} accentModule="sales" className="min-h-[280px]" data-testid="sales-performance-card">
           <span className="text-sm font-medium text-foreground">Sales performance</span>
           {summary.pipelineByStage.length === 0 ? (
             <BentoEmptyState
@@ -214,7 +210,8 @@ export default async function DashboardPage() {
           )}
         </BentoCard>
 
-        <BentoCard colSpan={6} accentModule="crm">
+        {/* Row 4 */}
+        <BentoCard colSpan={6} accentModule="crm" className="min-h-[260px]" data-testid="lead-source-card">
           <span className="text-sm font-medium text-foreground">Lead source analytics</span>
           {summary.leadsBySource.length === 0 ? (
             <BentoEmptyState
@@ -226,8 +223,7 @@ export default async function DashboardPage() {
           )}
         </BentoCard>
 
-        {/* Row 5 */}
-        <BentoCard colSpan={6} accentModule="work">
+        <BentoCard colSpan={6} accentModule="work" className="min-h-[260px]" data-testid="attention-card">
           <div className="flex items-center justify-between">
             <span className="text-sm font-medium text-foreground">Needs your attention</span>
             {urgentCount > 0 && <Badge variant="destructive">{urgentCount} urgent</Badge>}
@@ -248,56 +244,62 @@ export default async function DashboardPage() {
           )}
         </BentoCard>
 
-        <BentoCard colSpan={6} accentModule="overview">
+        {/* Row 5 */}
+        <BentoCard colSpan={7} accentModule="overview" className="min-h-[230px]" data-testid="recent-activity-card">
           <div className="flex items-center justify-between">
-            <span className="text-sm font-medium text-foreground">Recent activity and quick actions</span>
+            <span className="text-sm font-medium text-foreground">Recent activity</span>
             <Clock3 className="size-4 text-muted-foreground" />
           </div>
-          <div className="grid gap-4 lg:grid-cols-2">
-            <div className="flex min-h-0 flex-col gap-2">
-              {summary.recentActivities.length === 0 ? (
-                <BentoEmptyState
-                  title="No recent activity"
-                  description="Logged calls, tasks, and notes will appear here."
-                />
-              ) : (
-                <ul className="flex flex-col gap-2 overflow-y-auto">
-                  {summary.recentActivities.slice(0, 6).map((activity) => (
-                    <li key={activity.id} className="flex items-center justify-between gap-2 text-sm">
-                      <span className="truncate text-foreground">{activity.subject}</span>
-                      <span className="shrink-0 text-xs text-muted-foreground">{formatEnumLabel(activity.type)}</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-            <div className="grid content-start gap-2">
-              <Button asChild variant="outline" className="justify-start">
-                <Link href="/contacts">
-                  <UserPlus className="size-4" /> Add a contact
-                </Link>
-              </Button>
-              <Button asChild variant="outline" className="justify-start">
-                <Link href="/leads">
-                  <Target className="size-4" /> Capture a lead
-                </Link>
-              </Button>
-              <Button asChild variant="outline" className="justify-start">
-                <Link href="/deals">
-                  <KanbanSquare className="size-4" /> Open pipeline
-                </Link>
-              </Button>
-              <Button asChild variant="outline" className="justify-start">
-                <Link href="/members">
-                  <ShieldCheck className="size-4" /> Organisation settings
-                </Link>
-              </Button>
-            </div>
+          <div className="flex min-h-0 flex-1 flex-col gap-2">
+            {summary.recentActivities.length === 0 ? (
+              <BentoEmptyState
+                title="No recent activity"
+                description="Logged calls, tasks, and notes will appear here."
+              />
+            ) : (
+              <ul className="flex flex-col gap-2 overflow-y-auto">
+                {summary.recentActivities.slice(0, 8).map((activity) => (
+                  <li
+                    key={activity.id}
+                    className="flex items-center justify-between gap-2 rounded-md border border-border/60 px-3 py-2 text-sm"
+                  >
+                    <span className="truncate text-foreground">{activity.subject}</span>
+                    <span className="shrink-0 text-xs text-muted-foreground">{formatEnumLabel(activity.type)}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </BentoCard>
+
+        <BentoCard colSpan={5} accentModule="overview" className="min-h-[230px]" data-testid="quick-actions-card">
+          <span className="text-sm font-medium text-foreground">Quick actions</span>
+          <div className="grid content-start gap-2">
+            <Button asChild variant="outline" className="justify-start">
+              <Link href="/contacts">
+                <UserPlus className="size-4" /> Add a contact
+              </Link>
+            </Button>
+            <Button asChild variant="outline" className="justify-start">
+              <Link href="/leads">
+                <Target className="size-4" /> Capture a lead
+              </Link>
+            </Button>
+            <Button asChild variant="outline" className="justify-start">
+              <Link href="/deals">
+                <KanbanSquare className="size-4" /> Open pipeline
+              </Link>
+            </Button>
+            <Button asChild variant="outline" className="justify-start">
+              <Link href="/members">
+                <ShieldCheck className="size-4" /> Organisation settings
+              </Link>
+            </Button>
           </div>
         </BentoCard>
 
         {/* Row 6 */}
-        <BentoCard colSpan={12} accentModule="sales">
+        <BentoCard colSpan={12} accentModule="sales" className="min-h-[230px]" data-testid="sales-velocity-card">
           <span className="text-sm font-medium text-foreground">Sales velocity</span>
           {velocity.salesCycle.wonCount === 0 &&
           velocity.salesCycle.lostCount === 0 &&
@@ -307,8 +309,8 @@ export default async function DashboardPage() {
               description="Move deals through stages to reveal cycle-time and stage-duration metrics."
             />
           ) : (
-            <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
-              <div className="flex flex-col gap-3 sm:col-span-2">
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+              <div className="flex flex-col gap-3">
                 <p className="text-xs text-muted-foreground">Average time per stage</p>
                 {stageDurationsWithDeals.length === 0 ? (
                   <p className="text-sm text-muted-foreground">No completed stage segments yet.</p>
@@ -363,8 +365,9 @@ export default async function DashboardPage() {
           )}
         </BentoCard>
 
+        {/* Row 7 */}
         {aiEnabled ? (
-          <BentoCard colSpan={12} accentModule="intelligence">
+          <BentoCard colSpan={12} accentModule="intelligence" className="min-h-[170px]" data-testid="ai-insights-card">
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium text-foreground">AI insights</span>
               <Badge variant="default">Enabled</Badge>
@@ -377,7 +380,7 @@ export default async function DashboardPage() {
             />
           </BentoCard>
         ) : (
-          <BentoCard colSpan={12} accentModule="intelligence" className="py-4">
+          <BentoCard colSpan={12} accentModule="intelligence" className="py-4" data-testid="ai-insights-card">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="text-sm font-medium text-foreground">Activate AI insights</p>

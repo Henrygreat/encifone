@@ -59,8 +59,8 @@ export function MetricCard({
 
   const content = (
     <BentoCard colSpan={colSpan} accentModule={accentModule} className="min-w-0 justify-between">
-      <div className="flex items-start justify-between gap-2">
-        <span className="flex min-w-0 items-start gap-1.5 text-sm leading-snug text-muted-foreground">
+      <div className="flex min-h-8 items-start justify-between gap-2">
+        <span className="flex min-w-0 flex-1 items-start gap-1.5 pr-1 text-sm leading-snug text-muted-foreground">
           {label}
           {tooltip && (
             <Tooltip>
@@ -73,7 +73,7 @@ export function MetricCard({
         </span>
         {Icon && (
           <Icon
-            className="size-4 shrink-0 opacity-70"
+            className="mt-0.5 size-4 shrink-0 opacity-70"
             style={accentModule ? { color: `var(--module-${accentModule})` } : undefined}
           />
         )}

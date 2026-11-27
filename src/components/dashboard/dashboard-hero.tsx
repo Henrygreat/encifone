@@ -25,6 +25,7 @@ export function DashboardHero({
   firstName,
   organisationName,
   summaryLine,
+  highlights,
   quickActions,
   aiState,
   aiStatusLabel,
@@ -32,29 +33,38 @@ export function DashboardHero({
   firstName: string;
   organisationName: string;
   summaryLine: string;
+  highlights: Array<{ label: string; value: string }>;
   quickActions: ReactNode;
   aiState: IntelligenceCoreState;
   aiStatusLabel: string;
 }) {
   return (
     <BentoCard
-      colSpan={8}
+      colSpan={12}
       variant="glass"
-      className="min-h-[210px] flex-row items-center justify-between gap-4 overflow-hidden"
+      className="min-h-[220px] lg:min-h-[248px] flex-col justify-between gap-4 overflow-hidden lg:flex-row lg:items-center"
     >
-      <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+      <div className="flex min-w-0 flex-1 flex-col gap-2">
         <p className="text-sm font-medium" style={{ color: "var(--module-sales)" }}>
           {greeting(new Date().getHours())}, {firstName}
         </p>
-        <h1 className="truncate text-xl font-semibold tracking-tight text-foreground sm:text-2xl lg:text-3xl">
+        <h1 className="truncate text-xl font-semibold tracking-tight text-foreground sm:text-2xl lg:text-[2rem]">
           {organisationName}
         </h1>
         <p className="text-sm text-muted-foreground">{summaryLine}</p>
+        <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
+          {highlights.map((item) => (
+            <div key={item.label} className="rounded-lg border border-border/70 bg-muted/40 px-3 py-2">
+              <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{item.label}</p>
+              <p className="truncate text-sm font-medium text-foreground">{item.value}</p>
+            </div>
+          ))}
+        </div>
         <div className="mt-1 flex flex-wrap gap-2">{quickActions}</div>
       </div>
 
-      <div className="hidden shrink-0 flex-col items-center gap-1 sm:flex">
-        <div className="relative size-28 sm:size-32 lg:size-36">
+      <div className="hidden shrink-0 flex-col items-center gap-1 rounded-xl border border-border/70 bg-background/40 p-3 sm:flex lg:w-[220px]">
+        <div className="relative size-28 sm:size-32 lg:size-[8.5rem]">
           <AiOrb className="size-full" state={aiState} />
         </div>
         <p className="text-xs font-medium text-foreground">Intelligence Core</p>

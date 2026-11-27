@@ -14,7 +14,7 @@ import type { ModuleKey } from "@/components/app-shell/nav-config";
  */
 export function BentoGrid({ className, children }: { className?: string; children: React.ReactNode }) {
   return (
-    <div className={cn("grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-12 lg:gap-5", className)}>
+    <div className={cn("grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-6 lg:gap-5 xl:grid-cols-12", className)}>
       {children}
     </div>
   );
@@ -29,14 +29,15 @@ const MODULE_VAR: Record<ModuleKey, string> = {
   admin: "var(--module-admin)",
 };
 
-const COL_SPAN: Record<2 | 3 | 4 | 5 | 6 | 8 | 12, string> = {
-  2: "sm:col-span-1 lg:col-span-2",
-  3: "sm:col-span-1 lg:col-span-3",
-  4: "sm:col-span-2 lg:col-span-4",
-  5: "sm:col-span-2 lg:col-span-5",
-  6: "sm:col-span-2 lg:col-span-6",
-  8: "sm:col-span-2 lg:col-span-8",
-  12: "sm:col-span-2 lg:col-span-12",
+const COL_SPAN: Record<2 | 3 | 4 | 5 | 6 | 7 | 8 | 12, string> = {
+  2: "sm:col-span-1 md:col-span-2 xl:col-span-2",
+  3: "sm:col-span-1 md:col-span-3 xl:col-span-3",
+  4: "sm:col-span-2 md:col-span-3 xl:col-span-4",
+  5: "sm:col-span-2 md:col-span-3 xl:col-span-5",
+  6: "sm:col-span-2 md:col-span-6 xl:col-span-6",
+  7: "sm:col-span-2 md:col-span-6 xl:col-span-7",
+  8: "sm:col-span-2 md:col-span-6 xl:col-span-8",
+  12: "sm:col-span-2 md:col-span-6 xl:col-span-12",
 };
 
 const ROW_SPAN: Record<1 | 2 | 3, string> = {
@@ -46,7 +47,7 @@ const ROW_SPAN: Record<1 | 2 | 3, string> = {
 };
 
 export interface BentoCardProps extends React.ComponentProps<"div"> {
-  colSpan?: 2 | 3 | 4 | 5 | 6 | 8 | 12;
+  colSpan?: 2 | 3 | 4 | 5 | 6 | 7 | 8 | 12;
   rowSpan?: 1 | 2 | 3;
   /** Tints the card's top accent bar and any icon passed via `accentSlot`. */
   accentModule?: ModuleKey;
