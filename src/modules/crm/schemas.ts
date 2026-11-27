@@ -125,3 +125,33 @@ export const convertLeadSchema = z.object({
   contactId: z.string().min(1).optional(),
 });
 export type ConvertLeadInput = z.infer<typeof convertLeadSchema>;
+
+// --- Bulk actions & merge (§5.3) ---
+
+const bulkIdsSchema = z.array(z.string().min(1)).min(1).max(500);
+
+export const bulkContactIdsSchema = z.object({ ids: bulkIdsSchema });
+export type BulkContactIdsInput = z.infer<typeof bulkContactIdsSchema>;
+
+export const bulkReassignOwnerSchema = z.object({
+  ids: bulkIdsSchema,
+  ownerId: z.string().min(1).nullable(),
+});
+export type BulkReassignOwnerInput = z.infer<typeof bulkReassignOwnerSchema>;
+
+export const bulkAddTagSchema = z.object({
+  ids: bulkIdsSchema,
+  tag: z.string().min(1).max(60),
+});
+export type BulkAddTagInput = z.infer<typeof bulkAddTagSchema>;
+
+export const mergeContactsSchema = z.object({
+  keepId: z.string().min(1),
+  mergeId: z.string().min(1),
+});
+export type MergeContactsInput = z.infer<typeof mergeContactsSchema>;
+
+export const importContactsCsvSchema = z.object({
+  csv: z.string().min(1).max(5_000_000),
+});
+export type ImportContactsCsvInput = z.infer<typeof importContactsCsvSchema>;

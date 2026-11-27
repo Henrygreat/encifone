@@ -5,6 +5,7 @@ import { Capability, ForbiddenError, roleHasCapability } from "@/core/permission
 import type { ActiveMembership } from "@/core/tenancy";
 import { NotFoundError } from "@/lib/api";
 import { calculateLeadScore } from "@/modules/intelligence/lead-scoring";
+import { parseCsv, toCsvRow } from "@/lib/csv";
 import type {
   ConvertLeadInput,
   CreateCompanyInput,
@@ -17,6 +18,24 @@ import type {
   UpdateContactInput,
   UpdateLeadInput,
 } from "./schemas";
+
+interface ContactEmailEntry {
+  address: string;
+  label?: string;
+  isPrimary?: boolean;
+}
+interface ContactPhoneEntry {
+  number: string;
+  label?: string;
+  isPrimary?: boolean;
+}
+
+function readContactEmails(value: unknown): ContactEmailEntry[] {
+  return Array.isArray(value) ? (value as ContactEmailEntry[]) : [];
+}
+function readContactPhones(value: unknown): ContactPhoneEntry[] {
+  return Array.isArray(value) ? (value as ContactPhoneEntry[]) : [];
+}
 
 function requireCapability(acting: ActiveMembership, capability: Capability) {
   if (!roleHasCapability(acting.role, capability)) {
@@ -641,4 +660,362 @@ export async function convertLead(acting: ActiveMembership, id: string, input: C
   }
 
   return result;
+}
+
+// --- Bulk actions, duplicate detection, merge, CSV import/export (§5.3) ---
+//
+// Every bulk/merge operation re-derives its target set from
+// `organisationId: acting.organisationId` rather than trusting that the
+// caller-supplied ids are already tenant-scoped — an id for another
+// organisation's record simply has no matching row and is silently
+// excluded from the affected count, never acted upon.
+
+export async function bulkArchiveContacts(acting: ActiveMembership, ids: string[]) {
+  requireCapability(acting, Capability.CRM_MANAGE);
+
+  const result = await prisma.contact.updateMany({
+    where: { id: { in: ids }, organisationId: acting.organisationId },
+    data: { status: ContactStatus.ARCHIVED, deletedAt: new Date() },
+  });
+
+  await writeAuditLog({
+    organisationId: acting.organisationId,
+    actorUserId: acting.userId,
+    action: "contact.bulk_archived",
+    resourceType: "Contact",
+    metadata: { requestedCount: ids.length, affectedCount: result.count },
+  });
+
+  return { affectedCount: result.count };
+}
+
+export async function bulkReassignContactOwner(acting: ActiveMembership, ids: string[], ownerId: string | null) {
+  requireCapability(acting, Capability.CRM_MANAGE);
+
+  if (ownerId) {
+    await assertMembershipInOrg(acting.organisationId, ownerId);
+  }
+
+  const result = await prisma.contact.updateMany({
+    where: { id: { in: ids }, organisationId: acting.organisationId },
+    data: { ownerId },
+  });
+
+  await writeAuditLog({
+    organisationId: acting.organisationId,
+    actorUserId: acting.userId,
+    action: "contact.bulk_reassigned",
+    resourceType: "Contact",
+    metadata: { requestedCount: ids.length, affectedCount: result.count, ownerId },
+  });
+
+  return { affectedCount: result.count };
+}
+
+export async function bulkAddContactTag(acting: ActiveMembership, ids: string[], tag: string) {
+  requireCapability(acting, Capability.CRM_MANAGE);
+
+  const contacts = await prisma.contact.findMany({
+    where: { id: { in: ids }, organisationId: acting.organisationId },
+    select: { id: true, tags: true },
+  });
+
+  const toUpdate = contacts.filter((c) => !c.tags.includes(tag));
+  await prisma.$transaction(
+    toUpdate.map((c) => prisma.contact.update({ where: { id: c.id }, data: { tags: [...c.tags, tag] } }))
+  );
+
+  await writeAuditLog({
+    organisationId: acting.organisationId,
+    actorUserId: acting.userId,
+    action: "contact.bulk_tagged",
+    resourceType: "Contact",
+    metadata: { requestedCount: ids.length, affectedCount: toUpdate.length, tag },
+  });
+
+  return { affectedCount: toUpdate.length };
+}
+
+export interface DuplicateContactGroup {
+  matchedOn: "email";
+  value: string;
+  contacts: { id: string; firstName: string; lastName: string; companyName: string | null }[];
+}
+
+/**
+ * Email-address collisions only, for now — the one unambiguous signal
+ * that doesn't need fuzzy name-matching heuristics. Read-only; merging
+ * is a separate, explicit step so nothing is combined without a human
+ * choosing which record to keep.
+ */
+export async function findDuplicateContacts(acting: ActiveMembership): Promise<DuplicateContactGroup[]> {
+  requireCapability(acting, Capability.CRM_VIEW);
+
+  const contacts = await prisma.contact.findMany({
+    where: { organisationId: acting.organisationId, deletedAt: null },
+    include: { company: { select: { name: true } } },
+  });
+
+  const byEmail = new Map<string, typeof contacts>();
+  for (const contact of contacts) {
+    for (const email of readContactEmails(contact.emails)) {
+      const key = email.address?.toLowerCase().trim();
+      if (!key) continue;
+      byEmail.set(key, [...(byEmail.get(key) ?? []), contact]);
+    }
+  }
+
+  return Array.from(byEmail.entries())
+    .filter(([, group]) => group.length > 1)
+    .map(([value, group]) => ({
+      matchedOn: "email" as const,
+      value,
+      contacts: group.map((c) => ({
+        id: c.id,
+        firstName: c.firstName,
+        lastName: c.lastName,
+        companyName: c.company?.name ?? null,
+      })),
+    }));
+}
+
+/**
+ * Safely merges `mergeId` into `keepId`: every other record that
+ * referenced the loser (activities, leads, opportunities, clients,
+ * proposals) is re-pointed at the survivor inside one transaction, tags
+ * are unioned onto the survivor, and the loser is archived (never hard
+ * deleted — its history stays auditable).
+ */
+export async function mergeContacts(acting: ActiveMembership, keepId: string, mergeId: string) {
+  requireCapability(acting, Capability.CRM_MANAGE);
+
+  if (keepId === mergeId) {
+    throw new Error("Cannot merge a contact into itself.");
+  }
+
+  const [keep, merge] = await Promise.all([
+    prisma.contact.findFirst({ where: { id: keepId, organisationId: acting.organisationId } }),
+    prisma.contact.findFirst({ where: { id: mergeId, organisationId: acting.organisationId } }),
+  ]);
+  if (!keep) throw new NotFoundError("The contact to keep was not found in this organisation.");
+  if (!merge) throw new NotFoundError("The contact to merge was not found in this organisation.");
+
+  const merged = await prisma.$transaction(async (tx) => {
+    await tx.activity.updateMany({
+      where: { organisationId: acting.organisationId, entityType: "CONTACT", entityId: mergeId },
+      data: { entityId: keepId },
+    });
+    await tx.lead.updateMany({
+      where: { organisationId: acting.organisationId, contactId: mergeId },
+      data: { contactId: keepId },
+    });
+    await tx.opportunity.updateMany({
+      where: { organisationId: acting.organisationId, contactId: mergeId },
+      data: { contactId: keepId },
+    });
+    await tx.client.updateMany({
+      where: { organisationId: acting.organisationId, primaryContactId: mergeId },
+      data: { primaryContactId: keepId },
+    });
+    await tx.proposal.updateMany({
+      where: { organisationId: acting.organisationId, contactId: mergeId },
+      data: { contactId: keepId },
+    });
+
+    const mergedTags = Array.from(new Set([...keep.tags, ...merge.tags]));
+    const mergedEmails = [...readContactEmails(keep.emails)];
+    for (const email of readContactEmails(merge.emails)) {
+      if (!mergedEmails.some((e) => e.address.toLowerCase() === email.address.toLowerCase())) {
+        mergedEmails.push({ ...email, isPrimary: false });
+      }
+    }
+
+    const survivor = await tx.contact.update({
+      where: { id: keepId },
+      data: { tags: mergedTags, emails: mergedEmails as unknown as Prisma.InputJsonValue },
+    });
+    await tx.contact.update({
+      where: { id: mergeId },
+      data: { status: ContactStatus.ARCHIVED, deletedAt: new Date() },
+    });
+    return survivor;
+  });
+
+  await writeAuditLog({
+    organisationId: acting.organisationId,
+    actorUserId: acting.userId,
+    action: "contact.merged",
+    resourceType: "Contact",
+    resourceId: keepId,
+    metadata: { mergedFromId: mergeId },
+  });
+
+  return merged;
+}
+
+export interface CsvImportRowError {
+  row: number;
+  message: string;
+}
+export interface CsvImportResult {
+  createdCount: number;
+  errorCount: number;
+  errors: CsvImportRowError[];
+}
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/**
+ * Expects a header row with at least `firstName,lastName` — `email`,
+ * `phone`, `jobTitle`, and `companyName` are optional columns. Every row
+ * is validated independently; a bad row is skipped and reported, never
+ * allowed to abort the rows around it or to silently fabricate a missing
+ * required field.
+ */
+export async function importContactsCsv(acting: ActiveMembership, csvText: string): Promise<CsvImportResult> {
+  requireCapability(acting, Capability.CRM_MANAGE);
+
+  const rows = parseCsv(csvText);
+  if (rows.length < 2) {
+    return { createdCount: 0, errorCount: 0, errors: [] };
+  }
+
+  const header = rows[0].map((h) => h.trim());
+  const dataRows = rows.slice(1);
+  const errors: CsvImportRowError[] = [];
+  let createdCount = 0;
+
+  for (let i = 0; i < dataRows.length; i++) {
+    const rowNumber = i + 2; // 1-indexed, plus the header row
+    const record: Record<string, string> = {};
+    header.forEach((column, index) => {
+      record[column] = (dataRows[i][index] ?? "").trim();
+    });
+
+    const firstName = record.firstName;
+    const lastName = record.lastName;
+    if (!firstName || !lastName) {
+      errors.push({ row: rowNumber, message: "firstName and lastName are required." });
+      continue;
+    }
+    if (record.email && !EMAIL_PATTERN.test(record.email)) {
+      errors.push({ row: rowNumber, message: `"${record.email}" is not a valid email address.` });
+      continue;
+    }
+
+    try {
+      let companyId: string | undefined;
+      if (record.companyName) {
+        const existingCompany = await prisma.company.findFirst({
+          where: { organisationId: acting.organisationId, name: record.companyName, deletedAt: null },
+          select: { id: true },
+        });
+        companyId = existingCompany?.id ?? (await createCompany(acting, { name: record.companyName })).id;
+      }
+
+      await createContact(acting, {
+        firstName,
+        lastName,
+        jobTitle: record.jobTitle || undefined,
+        companyId,
+        emails: record.email ? [{ address: record.email, isPrimary: true }] : undefined,
+        phones: record.phone ? [{ number: record.phone, isPrimary: true }] : undefined,
+      });
+      createdCount++;
+    } catch (error) {
+      errors.push({ row: rowNumber, message: error instanceof Error ? error.message : "Unknown error." });
+    }
+  }
+
+  await writeAuditLog({
+    organisationId: acting.organisationId,
+    actorUserId: acting.userId,
+    action: "contact.csv_imported",
+    resourceType: "Contact",
+    metadata: { createdCount, errorCount: errors.length },
+  });
+
+  return { createdCount, errorCount: errors.length, errors };
+}
+
+/** Every exported cell goes through `toCsvRow`, which guards against CSV
+ * formula injection before quoting — see src/lib/csv.ts. */
+export async function exportContactsCsv(acting: ActiveMembership): Promise<string> {
+  requireCapability(acting, Capability.CRM_VIEW);
+
+  const contacts = await prisma.contact.findMany({
+    where: { organisationId: acting.organisationId, deletedAt: null },
+    include: { company: { select: { name: true } } },
+    orderBy: { createdAt: "desc" },
+  });
+
+  const header = toCsvRow(["First name", "Last name", "Email", "Phone", "Job title", "Company", "Status", "Tags"]);
+  const lines = contacts.map((contact) =>
+    toCsvRow([
+      contact.firstName,
+      contact.lastName,
+      readContactEmails(contact.emails)[0]?.address ?? "",
+      readContactPhones(contact.phones)[0]?.number ?? "",
+      contact.jobTitle ?? "",
+      contact.company?.name ?? "",
+      contact.status,
+      contact.tags.join("; "),
+    ])
+  );
+
+  return [header, ...lines].join("\r\n");
+}
+
+export async function bulkArchiveLeads(acting: ActiveMembership, ids: string[]) {
+  requireCapability(acting, Capability.CRM_MANAGE);
+
+  const result = await prisma.lead.updateMany({
+    where: { id: { in: ids }, organisationId: acting.organisationId },
+    data: { status: LeadStatus.ARCHIVED, deletedAt: new Date() },
+  });
+
+  await writeAuditLog({
+    organisationId: acting.organisationId,
+    actorUserId: acting.userId,
+    action: "lead.bulk_archived",
+    resourceType: "Lead",
+    metadata: { requestedCount: ids.length, affectedCount: result.count },
+  });
+
+  return { affectedCount: result.count };
+}
+
+export async function bulkReassignLeadOwner(acting: ActiveMembership, ids: string[], ownerId: string | null) {
+  requireCapability(acting, Capability.CRM_MANAGE);
+
+  if (ownerId) {
+    await assertMembershipInOrg(acting.organisationId, ownerId);
+  }
+
+  const leads = await prisma.lead.findMany({
+    where: { id: { in: ids }, organisationId: acting.organisationId },
+    select: { id: true, ownerId: true },
+  });
+
+  await prisma.$transaction(
+    leads.flatMap((lead) => {
+      if (lead.ownerId === ownerId) return [];
+      return [
+        prisma.lead.update({ where: { id: lead.id }, data: { ownerId } }),
+        prisma.leadOwnershipHistory.create({
+          data: { leadId: lead.id, fromOwnerId: lead.ownerId, toOwnerId: ownerId },
+        }),
+      ];
+    })
+  );
+
+  await writeAuditLog({
+    organisationId: acting.organisationId,
+    actorUserId: acting.userId,
+    action: "lead.bulk_reassigned",
+    resourceType: "Lead",
+    metadata: { requestedCount: ids.length, affectedCount: leads.length, ownerId },
+  });
+
+  return { affectedCount: leads.length };
 }
