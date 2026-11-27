@@ -1,5 +1,12 @@
 import { randomUUID } from "crypto";
-import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
+import {
+  S3Client,
+  PutObjectCommand,
+  GetObjectCommand,
+  DeleteObjectCommand,
+  HeadObjectCommand,
+  NotFound,
+} from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 /**
@@ -93,4 +100,21 @@ export async function createDownloadUrl(storageKey: string, downloadFilename?: s
 
 export async function deleteObject(storageKey: string): Promise<void> {
   await getClient().send(new DeleteObjectCommand({ Bucket: bucket(), Key: storageKey }));
+}
+
+/** Confirms the object actually exists (and, if given, roughly matches
+ * the expected size) — never trust a client's bare say-so that an
+ * upload finished before marking a ClientDocument's metadata row
+ * confirmed. */
+export async function objectExists(storageKey: string, expectedSizeBytes?: number): Promise<boolean> {
+  try {
+    const result = await getClient().send(new HeadObjectCommand({ Bucket: bucket(), Key: storageKey }));
+    if (expectedSizeBytes != null && result.ContentLength != null) {
+      return result.ContentLength === expectedSizeBytes;
+    }
+    return true;
+  } catch (error) {
+    if (error instanceof NotFound) return false;
+    throw error;
+  }
 }
