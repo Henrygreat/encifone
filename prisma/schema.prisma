@@ -108,6 +108,8 @@ model Organisation {
   contractTemplates ContractTemplate[]
   contracts         Contract[]
   payments          Payment[]
+  aiConfig          AIOrganisationConfig?
+  aiUsageLogs       AIUsageLog[]
 }
 
 enum MembershipRole {
@@ -995,4 +997,53 @@ model IncomingWebhookEvent {
   payload         Json?
 
   @@unique([provider, externalEventId])
+}
+
+// --- AI gateway configuration & usage (Phase 2.8, docs/MASTER_ROADMAP.md,
+// a narrow sales-context pull-forward from docs/AI_ARCHITECTURE.md — not
+// the full agent framework/tool registry/RAG/autonomy-level model that doc
+// also describes; those remain unbuilt, see docs/IMPLEMENTATION_STATUS.md) ---
+
+enum AIProviderType {
+  ANTHROPIC
+  OPENAI
+  GOOGLE
+  OPENROUTER
+}
+
+model AIOrganisationConfig {
+  id             String          @id @default(cuid())
+  organisationId String          @unique
+  provider       AIProviderType?
+  model          String?
+  // AES-256-GCM, keyed from AUTH_SECRET (src/lib/crypto.ts) — never
+  // returned by any API response, never logged. Null means "use the
+  // platform-level provider key" (ANTHROPIC_API_KEY etc. in .env) if one
+  // is configured there instead of a per-org bring-your-own-key.
+  encryptedApiKey String?
+  enabled        Boolean         @default(false)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+}
+
+model AIUsageLog {
+  id             String          @id @default(cuid())
+  organisationId String
+  // Which Phase 2.8 feature made the call — e.g. "lead_qualification",
+  // "deal_risk", "next_best_action", "client_summary".
+  feature        String
+  provider       AIProviderType
+  model          String
+  inputTokens    Int             @default(0)
+  outputTokens   Int             @default(0)
+  succeeded      Boolean
+  errorMessage   String?
+  createdAt      DateTime        @default(now())
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+
+  @@index([organisationId, createdAt])
+  @@index([organisationId, feature])
 }

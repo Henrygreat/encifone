@@ -5,5 +5,6 @@
   "20261126132605_crm_foundation": "7fc26dec13d95110a72ad0ab5ffac939f37df776d77fcfa4db79b32e9b18aee7",
   "20261126182829_sales_pipeline_and_activities": "a124e462724a41ee88a828125c1a561ae85b5e126d5259695bf13d1e4a65dac3",
   "20261126235912_client_lifecycle_catalogue_proposals_views": "20c0a4907739ca9488d223b3cb278c3562ad3c1cb28c055cdec341e5002f4477",
-  "20261127064752_contracts_esignature_payments_webhooks": "1330e3a8d9b34abd23253252709a8c0a4d92f3fe5af542db3032ec51be1e761e"
+  "20261127064752_contracts_esignature_payments_webhooks": "1330e3a8d9b34abd23253252709a8c0a4d92f3fe5af542db3032ec51be1e761e",
+  "20261127070847_ai_gateway_config_usage": "8c8812c744726ca202146a0cbc2508c1d28d914e2807ac065d0e13d967eea642"
 }
