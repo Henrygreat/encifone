@@ -4,7 +4,7 @@ import { writeAuditLog } from "@/core/audit";
 import { Capability, ForbiddenError, roleHasCapability } from "@/core/permissions";
 import type { ActiveMembership } from "@/core/tenancy";
 import { NotFoundError } from "@/lib/api";
-import { ensureClientFromWonOpportunity } from "@/modules/clients/service";
+import { attemptGatedConversion } from "@/modules/sales/conversion";
 import type {
   CreateOpportunityInput,
   CreatePipelineInput,
@@ -378,8 +378,15 @@ export async function moveOpportunity(acting: ActiveMembership, id: string, inpu
     // only ever originate one Client.
     let createdClientId: string | null = null;
     if (targetStage.isWon) {
-      const client = await ensureClientFromWonOpportunity(tx, acting.organisationId, id);
-      createdClientId = client.id;
+      // Null when the org requires a signed contract and/or a succeeded
+      // payment and that gate isn't satisfied yet (docs/MASTER_ROADMAP.md
+      // 2.7) — conversion then happens later, outside this transaction,
+      // once a webhook reports the gate satisfied. Both gates default
+      // false, so this is a same-transaction Client creation for every
+      // org that hasn't opted into gating — unchanged from before gating
+      // existed.
+      const client = await attemptGatedConversion(acting.organisationId, id, tx);
+      createdClientId = client?.id ?? null;
     }
 
     return { result, createdClientId };

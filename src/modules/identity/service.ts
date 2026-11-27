@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { writeAuditLog } from "@/core/audit";
 import { Capability, ForbiddenError, roleHasCapability } from "@/core/permissions";
 import type { ActiveMembership } from "@/core/tenancy";
-import type { AcceptInviteInput, InviteMemberInput, RegisterInput } from "./schemas";
+import type { AcceptInviteInput, InviteMemberInput, RegisterInput, UpdateOrganisationSettingsInput } from "./schemas";
 
 const PASSWORD_HASH_ROUNDS = 12;
 
@@ -214,4 +214,42 @@ export async function canSwitchToOrganisation(userId: string, organisationId: st
     where: { userId, organisationId, status: MembershipStatus.ACTIVE },
   });
   return Boolean(membership);
+}
+
+export async function getOrganisationSettings(acting: ActiveMembership) {
+  if (!roleHasCapability(acting.role, Capability.ORG_VIEW_MEMBERS)) {
+    throw new ForbiddenError("You do not have permission to view this organisation's settings.");
+  }
+  return prisma.organisation.findUniqueOrThrow({
+    where: { id: acting.organisationId },
+    select: { id: true, name: true, conversionRequiresContract: true, conversionRequiresPayment: true },
+  });
+}
+
+/**
+ * The lead-to-client conversion gate (docs/MASTER_ROADMAP.md 2.7) — the
+ * first real use of Capability.ORG_UPDATE_SETTINGS since it was modelled
+ * in Phase 1 with no feature behind it yet.
+ */
+export async function updateOrganisationSettings(acting: ActiveMembership, input: UpdateOrganisationSettingsInput) {
+  if (!roleHasCapability(acting.role, Capability.ORG_UPDATE_SETTINGS)) {
+    throw new ForbiddenError("You do not have permission to update this organisation's settings.");
+  }
+
+  const organisation = await prisma.organisation.update({
+    where: { id: acting.organisationId },
+    data: input,
+    select: { id: true, name: true, conversionRequiresContract: true, conversionRequiresPayment: true },
+  });
+
+  await writeAuditLog({
+    organisationId: acting.organisationId,
+    actorUserId: acting.userId,
+    action: "organisation.settings_updated",
+    resourceType: "Organisation",
+    resourceId: acting.organisationId,
+    metadata: { fields: Object.keys(input) },
+  });
+
+  return organisation;
 }

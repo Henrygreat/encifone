@@ -31,3 +31,11 @@ export const createOrganisationSchema = z.object({
   name: z.string().min(1).max(160),
 });
 export type CreateOrganisationInput = z.infer<typeof createOrganisationSchema>;
+
+/** Lead-to-client conversion gating (docs/MASTER_ROADMAP.md 2.7) — both
+ * optional so a partial update only touches the field actually sent. */
+export const updateOrganisationSettingsSchema = z.object({
+  conversionRequiresContract: z.boolean().optional(),
+  conversionRequiresPayment: z.boolean().optional(),
+});
+export type UpdateOrganisationSettingsInput = z.infer<typeof updateOrganisationSettingsSchema>;
