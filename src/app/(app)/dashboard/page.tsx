@@ -4,6 +4,7 @@ import { getServerAuthSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { formatMoneyMinor } from "@/lib/money";
 import { getDashboardSummary } from "@/modules/dashboard/service";
+import { getActionCentreItems, type ActionCentreSeverity } from "@/modules/intelligence/action-centre";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -52,15 +53,24 @@ function greeting(hour: number) {
 export default async function DashboardPage() {
   const acting = await requireActiveMembership();
 
-  const [session, organisation, memberCount, summary] = await Promise.all([
+  const [session, organisation, memberCount, summary, actionCentreItems] = await Promise.all([
     getServerAuthSession(),
     prisma.organisation.findUniqueOrThrow({ where: { id: acting.organisationId } }),
     prisma.membership.count({ where: { organisationId: acting.organisationId, status: "ACTIVE" } }),
     getDashboardSummary(acting),
+    getActionCentreItems(acting),
   ]);
 
   const firstName = session?.user?.name?.split(" ")[0] ?? "there";
-  const priorityCount = summary.overdueTasksCount + summary.upcomingFollowUps.length;
+  const SEVERITY_ORDER: Record<ActionCentreSeverity, number> = { urgent: 0, warning: 1, info: 2 };
+  const sortedActionItems = [...actionCentreItems].sort(
+    (a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity]
+  );
+  const SEVERITY_BADGE_VARIANT: Record<ActionCentreSeverity, "destructive" | "secondary" | "outline"> = {
+    urgent: "destructive",
+    warning: "secondary",
+    info: "outline",
+  };
 
   return (
     <div className="flex flex-col gap-6 p-6">
@@ -172,24 +182,42 @@ export default async function DashboardPage() {
           )}
         </BentoCard>
 
-        {/* Priority actions — overdue tasks + upcoming follow-ups combined */}
+        {/* Needs your attention — real, tenant-scoped signals, never
+            fabricated urgency (src/modules/intelligence/action-centre.ts) */}
         <BentoCard colSpan={4} rowSpan={2} accentModule="work">
           <div className="flex items-center justify-between">
-            <span className="text-sm font-medium text-foreground">Priority actions</span>
-            {summary.overdueTasksCount > 0 && (
-              <Badge variant="destructive">{summary.overdueTasksCount} overdue</Badge>
+            <span className="text-sm font-medium text-foreground">Needs your attention</span>
+            {sortedActionItems.filter((i) => i.severity === "urgent").length > 0 && (
+              <Badge variant="destructive">
+                {sortedActionItems.filter((i) => i.severity === "urgent").length} urgent
+              </Badge>
             )}
           </div>
-          {priorityCount === 0 ? (
-            <BentoEmptyState title="Nothing urgent" description="You're on top of your open tasks." />
+          {sortedActionItems.length === 0 ? (
+            <BentoEmptyState title="Nothing urgent" description="You're on top of your pipeline and follow-ups." />
           ) : (
-            <ul className="flex flex-col gap-1.5">
-              {summary.upcomingFollowUps.map((task) => (
-                <li key={task.id} className="flex items-center justify-between text-sm">
-                  <span className="truncate text-foreground">{task.subject}</span>
-                  <span className="shrink-0 text-xs text-muted-foreground">{task.dueAt?.toLocaleDateString()}</span>
+            <ul className="flex flex-col gap-1.5 overflow-y-auto">
+              {sortedActionItems.slice(0, 8).map((item) => (
+                <li key={item.id}>
+                  <Link
+                    href={item.href}
+                    className="flex items-center justify-between gap-2 rounded-md px-1 py-0.5 text-sm hover:bg-muted"
+                  >
+                    <span className="flex flex-col truncate">
+                      <span className="truncate text-foreground">{item.title}</span>
+                      <span className="truncate text-xs text-muted-foreground">{item.detail}</span>
+                    </span>
+                    <Badge variant={SEVERITY_BADGE_VARIANT[item.severity]} className="shrink-0">
+                      {item.severity}
+                    </Badge>
+                  </Link>
                 </li>
               ))}
+              {sortedActionItems.length > 8 && (
+                <li className="pt-1 text-xs text-muted-foreground">
+                  +{sortedActionItems.length - 8} more
+                </li>
+              )}
             </ul>
           )}
         </BentoCard>
