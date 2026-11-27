@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -69,9 +70,12 @@ export default function PortalLoginPage() {
           </Button>
         </form>
 
-        <p className="mt-6 text-center text-xs text-muted-foreground">
-          Lost your invite link? Contact the team that invited you.
-        </p>
+        <div className="mt-6 flex flex-col items-center gap-2 text-xs text-muted-foreground">
+          <Link href="/portal/forgot-password" className="underline underline-offset-2 hover:text-foreground">
+            Forgot your password?
+          </Link>
+          <p>Lost your invite link? Contact the team that invited you.</p>
+        </div>
       </div>
     </div>
   );

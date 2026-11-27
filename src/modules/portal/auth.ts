@@ -21,6 +21,7 @@ export const PORTAL_SESSION_COOKIE = "clientos_portal_session";
 const PASSWORD_HASH_ROUNDS = 12;
 const INVITE_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 const SESSION_EXPIRY_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+const PASSWORD_RESET_EXPIRY_MS = 2 * 60 * 60 * 1000; // 2 hours
 
 export class PortalUnauthenticatedError extends UnauthenticatedError {
   constructor(message = "You must be signed in to the client portal to do this.") {
@@ -151,6 +152,89 @@ export async function loginPortalUser(email: string, password: string) {
 
   await prisma.clientPortalUser.update({ where: { id: portalUser.id }, data: { lastLoginAt: new Date() } });
   return createPortalSessionCookie(portalUser.id);
+}
+
+/**
+ * Creates a one-time reset token for an active portal user.
+ * Always returns a generic success shape so callers don't leak whether
+ * a specific email exists.
+ */
+export async function requestClientPortalPasswordReset(email: string) {
+  const portalUser = await prisma.clientPortalUser.findUnique({ where: { email: email.toLowerCase() } });
+  if (!portalUser || portalUser.status !== ClientPortalUserStatus.ACTIVE || !portalUser.passwordHash) {
+    return { requested: true } as const;
+  }
+
+  const rawToken = crypto.randomBytes(32).toString("hex");
+  const tokenHash = hashToken(rawToken);
+
+  await prisma.$transaction([
+    prisma.clientPortalPasswordResetToken.deleteMany({ where: { clientPortalUserId: portalUser.id, usedAt: null } }),
+    prisma.clientPortalPasswordResetToken.create({
+      data: {
+        clientPortalUserId: portalUser.id,
+        tokenHash,
+        expiresAt: new Date(Date.now() + PASSWORD_RESET_EXPIRY_MS),
+      },
+    }),
+  ]);
+
+  await writeAuditLog({
+    organisationId: portalUser.organisationId,
+    actorUserId: null,
+    action: "portal_user.password_reset_requested",
+    resourceType: "ClientPortalUser",
+    resourceId: portalUser.id,
+  });
+
+  return {
+    requested: true,
+    // With no email delivery wired yet, non-production can surface the URL
+    // so teams can complete recovery manually while preserving production secrecy.
+    resetUrl:
+      process.env.NODE_ENV === "production"
+        ? undefined
+        : `${env.APP_URL}/portal/reset-password?token=${rawToken}`,
+  } as const;
+}
+
+export async function resetClientPortalPassword(input: { token: string; password: string }) {
+  const tokenHash = hashToken(input.token);
+  const reset = await prisma.clientPortalPasswordResetToken.findUnique({
+    where: { tokenHash },
+    include: { clientPortalUser: true },
+  });
+
+  if (
+    !reset ||
+    reset.usedAt ||
+    reset.expiresAt < new Date() ||
+    reset.clientPortalUser.status !== ClientPortalUserStatus.ACTIVE
+  ) {
+    throw new Error("This password reset link is invalid or has expired.");
+  }
+
+  const passwordHash = await bcrypt.hash(input.password, PASSWORD_HASH_ROUNDS);
+  await prisma.$transaction([
+    prisma.clientPortalUser.update({
+      where: { id: reset.clientPortalUserId },
+      data: { passwordHash, lastLoginAt: new Date() },
+    }),
+    prisma.clientPortalPasswordResetToken.update({ where: { id: reset.id }, data: { usedAt: new Date() } }),
+    prisma.clientPortalPasswordResetToken.deleteMany({ where: { clientPortalUserId: reset.clientPortalUserId, usedAt: null } }),
+    // Resetting password immediately invalidates all existing sessions.
+    prisma.clientPortalSession.deleteMany({ where: { clientPortalUserId: reset.clientPortalUserId } }),
+  ]);
+
+  await writeAuditLog({
+    organisationId: reset.clientPortalUser.organisationId,
+    actorUserId: null,
+    action: "portal_user.password_reset_completed",
+    resourceType: "ClientPortalUser",
+    resourceId: reset.clientPortalUserId,
+  });
+
+  return createPortalSessionCookie(reset.clientPortalUserId);
 }
 
 /** Creates a session row (storing only its hash) and sets the httpOnly

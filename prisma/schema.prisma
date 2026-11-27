@@ -1107,6 +1107,7 @@ model ClientPortalUser {
 
   invites               ClientPortalInvite[]
   sessions              ClientPortalSession[]
+  passwordResetTokens   ClientPortalPasswordResetToken[]
   uploadedDocuments     ClientDocument[]        @relation("DocumentUploadedByPortalUser")
   completedSteps        ClientOnboardingStep[]  @relation("StepCompletedByPortalUser")
   receivedNotifications Notification[]          @relation("NotificationRecipientPortalUser")
@@ -1142,6 +1143,22 @@ model ClientPortalSession {
   clientPortalUser ClientPortalUser @relation(fields: [clientPortalUserId], references: [id], onDelete: Cascade)
 
   @@index([clientPortalUserId])
+}
+
+// Password-reset tokens are one-time and short-lived. The raw token is
+// never stored — only its SHA-256 hash — so a database-only read cannot
+// be used to take over an account.
+model ClientPortalPasswordResetToken {
+  id                 String   @id @default(cuid())
+  clientPortalUserId String
+  tokenHash          String   @unique
+  expiresAt          DateTime
+  usedAt             DateTime?
+  createdAt          DateTime @default(now())
+
+  clientPortalUser ClientPortalUser @relation(fields: [clientPortalUserId], references: [id], onDelete: Cascade)
+
+  @@index([clientPortalUserId, createdAt])
 }
 
 enum OnboardingStepType {

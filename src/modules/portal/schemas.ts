@@ -19,3 +19,14 @@ export const portalLoginSchema = z.object({
   password: z.string().min(1).max(200),
 });
 export type PortalLoginInput = z.infer<typeof portalLoginSchema>;
+
+export const requestPortalPasswordResetSchema = z.object({
+  email: z.string().email(),
+});
+export type RequestPortalPasswordResetInput = z.infer<typeof requestPortalPasswordResetSchema>;
+
+export const resetPortalPasswordSchema = z.object({
+  token: z.string().min(1),
+  password: z.string().min(8).max(200),
+});
+export type ResetPortalPasswordInput = z.infer<typeof resetPortalPasswordSchema>;

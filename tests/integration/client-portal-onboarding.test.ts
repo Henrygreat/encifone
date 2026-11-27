@@ -30,6 +30,8 @@ import {
   disableClientPortalUser,
   inviteClientPortalUser,
   loginPortalUser,
+  requestClientPortalPasswordReset,
+  resetClientPortalPassword,
   PORTAL_SESSION_COOKIE,
   PortalUnauthenticatedError,
   requireActivePortalSession,
@@ -101,6 +103,7 @@ afterAll(async () => {
   await prisma.clientOnboarding.deleteMany({ where: { client: { organisationId: { in: createdOrgIds } } } });
   await prisma.onboardingTemplateStep.deleteMany({ where: { template: { organisationId: { in: createdOrgIds } } } });
   await prisma.onboardingTemplate.deleteMany({ where: { organisationId: { in: createdOrgIds } } });
+  await prisma.clientPortalPasswordResetToken.deleteMany({ where: { clientPortalUser: { organisationId: { in: createdOrgIds } } } });
   await prisma.clientPortalSession.deleteMany({ where: { clientPortalUser: { organisationId: { in: createdOrgIds } } } });
   await prisma.clientPortalInvite.deleteMany({ where: { clientPortalUser: { organisationId: { in: createdOrgIds } } } });
   await prisma.clientPortalUser.deleteMany({ where: { organisationId: { in: createdOrgIds } } });
@@ -215,6 +218,63 @@ describe("portal invite -> accept -> login -> session", () => {
     await expect(
       inviteClientPortalUser(actingOrgA, { clientId: clientB.id, email: uniqueEmail("cross-org-contact") })
     ).rejects.toThrow(/not found/i);
+  });
+
+  it("resets password with a one-time token and invalidates previous sessions", async () => {
+    const acting = await freshOrgOwner("ResetPassword");
+    const client = await freshWonClient(acting, `Reset Client ${randomUUID()}`);
+    const email = uniqueEmail("reset-contact");
+
+    const { inviteUrl } = await inviteClientPortalUser(acting, { clientId: client.id, email });
+    const inviteToken = new URL(inviteUrl).searchParams.get("token")!;
+    await acceptClientPortalInvite({ token: inviteToken, password: "oldpass123" });
+
+    const oldSessionCookie = cookieJar.get(PORTAL_SESSION_COOKIE);
+    expect(oldSessionCookie).toBeTruthy();
+
+    const resetRequest = await requestClientPortalPasswordReset(email);
+    expect(resetRequest.requested).toBe(true);
+    expect(resetRequest.resetUrl).toContain("/portal/reset-password?token=");
+    const resetToken = new URL(resetRequest.resetUrl!).searchParams.get("token")!;
+
+    cookieJar.clear();
+    await resetClientPortalPassword({ token: resetToken, password: "newpass123" });
+    const newSessionCookie = cookieJar.get(PORTAL_SESSION_COOKIE);
+    expect(newSessionCookie).toBeTruthy();
+    expect(newSessionCookie).not.toBe(oldSessionCookie);
+
+    cookieJar.clear();
+    await expect(loginPortalUser(email, "oldpass123")).rejects.toThrow(/Invalid email or password/);
+    await loginPortalUser(email, "newpass123");
+  });
+
+  it("rejects expired or already-used password reset tokens", async () => {
+    const acting = await freshOrgOwner("ResetExpiry");
+    const client = await freshWonClient(acting, `Reset Expiry Client ${randomUUID()}`);
+    const email = uniqueEmail("reset-expiry-contact");
+
+    const { inviteUrl } = await inviteClientPortalUser(acting, { clientId: client.id, email });
+    const inviteToken = new URL(inviteUrl).searchParams.get("token")!;
+    await acceptClientPortalInvite({ token: inviteToken, password: "startpass123" });
+
+    const resetRequest = await requestClientPortalPasswordReset(email);
+    const resetToken = new URL(resetRequest.resetUrl!).searchParams.get("token")!;
+
+    const tokenRow = await prisma.clientPortalPasswordResetToken.findFirstOrThrow({
+      where: { clientPortalUser: { email } },
+      orderBy: { createdAt: "desc" },
+    });
+    await prisma.clientPortalPasswordResetToken.update({ where: { id: tokenRow.id }, data: { expiresAt: new Date(Date.now() - 1000) } });
+    await expect(resetClientPortalPassword({ token: resetToken, password: "newpass123" })).rejects.toThrow(
+      /invalid or has expired/
+    );
+
+    const second = await requestClientPortalPasswordReset(email);
+    const secondToken = new URL(second.resetUrl!).searchParams.get("token")!;
+    await resetClientPortalPassword({ token: secondToken, password: "newpass123" });
+    await expect(resetClientPortalPassword({ token: secondToken, password: "anotherpass123" })).rejects.toThrow(
+      /invalid or has expired/
+    );
   });
 });
 
