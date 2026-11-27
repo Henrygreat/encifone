@@ -334,28 +334,25 @@ export default function LeadsPage() {
             <DropdownMenuContent>
               {savedViews?.views.length ? (
                 savedViews.views.map((view) => (
-                  <DropdownMenuItem
-                    key={view.id}
-                    onClick={() => applySavedView(view)}
-                    className="flex items-center justify-between gap-2"
-                  >
-                    <span>
+                  // Two independent menu items, not a button nested inside
+                  // one — a nested <button> isn't reachable by arrow-key
+                  // navigation in a Radix dropdown (only the outer
+                  // DropdownMenuItem is), so a keyboard-only user would have
+                  // had no way to delete a view at all.
+                  <div key={view.id} role="group" aria-label={view.name}>
+                    <DropdownMenuItem onClick={() => applySavedView(view)}>
                       {view.name}
                       {view.ownerId === null && (
                         <span className="ml-1.5 text-xs text-muted-foreground">(shared)</span>
                       )}
-                    </span>
-                    <button
-                      type="button"
-                      className="text-xs text-muted-foreground hover:text-destructive"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onDeleteView(view);
-                      }}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => onDeleteView(view)}
+                      className="pl-6 text-xs text-muted-foreground focus:text-destructive"
                     >
-                      Delete
-                    </button>
-                  </DropdownMenuItem>
+                      Delete &ldquo;{view.name}&rdquo;
+                    </DropdownMenuItem>
+                  </div>
                 ))
               ) : (
                 <DropdownMenuItem disabled>No saved views yet</DropdownMenuItem>
@@ -488,7 +485,11 @@ export default function LeadsPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-10">
-                    <Checkbox checked={allSelected} onCheckedChange={(v) => toggleAll(items, Boolean(v))} />
+                    <Checkbox
+                      checked={allSelected}
+                      onCheckedChange={(v) => toggleAll(items, Boolean(v))}
+                      aria-label="Select all leads on this page"
+                    />
                   </TableHead>
                   <TableHead>Lead</TableHead>
                   <TableHead>Company</TableHead>
@@ -510,6 +511,7 @@ export default function LeadsPage() {
                         <Checkbox
                           checked={selectedIds.has(lead.id)}
                           onCheckedChange={(v) => toggleOne(lead.id, Boolean(v))}
+                          aria-label={`Select ${name}`}
                         />
                       </TableCell>
                       <TableCell>

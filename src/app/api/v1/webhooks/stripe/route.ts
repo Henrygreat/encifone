@@ -21,7 +21,11 @@ export async function POST(request: Request) {
       await attemptGatedConversion(result.payment.organisationId, result.payment.opportunityId);
     }
 
-    return NextResponse.json(result);
+    // A minimal acknowledgement only — Stripe doesn't read the response
+    // body, and there's no reason to echo the full Payment row (or any
+    // other org's data) back over an endpoint whose only caller
+    // authenticates via a shared signature rather than a session.
+    return NextResponse.json({ received: true });
   } catch (error) {
     return errorResponse(error);
   }

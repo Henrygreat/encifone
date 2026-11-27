@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import type { ZodSchema } from "zod";
 import { ForbiddenError } from "@/core/permissions";
 import { NoActiveOrganisationError, UnauthenticatedError } from "@/core/tenancy";
+import { RateLimitError } from "@/lib/rate-limit";
 
 export async function parseJsonBody<T>(request: Request, schema: ZodSchema<T>): Promise<T> {
   const body = await request.json().catch(() => null);
@@ -54,6 +55,12 @@ export function errorResponse(error: unknown): NextResponse {
   }
   if (error instanceof NotFoundError) {
     return NextResponse.json({ error: error.message }, { status: 404 });
+  }
+  if (error instanceof RateLimitError) {
+    return NextResponse.json(
+      { error: error.message },
+      { status: 429, headers: { "Retry-After": String(error.retryAfterSeconds) } }
+    );
   }
   const message = error instanceof Error ? error.message : "Something went wrong.";
   return NextResponse.json({ error: message }, { status: 400 });

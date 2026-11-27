@@ -256,6 +256,7 @@ export default function ProposalsPage() {
                       type="button"
                       variant="outline"
                       size="icon"
+                      aria-label={`Remove line ${index + 1}`}
                       disabled={fields.length <= 1}
                       onClick={() => remove(index)}
                     >

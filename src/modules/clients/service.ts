@@ -259,10 +259,14 @@ export async function ensureClientFromWonOpportunity(
   organisationId: string,
   opportunityId: string
 ) {
-  const existing = await tx.client.findUnique({ where: { originatingOpportunityId: opportunityId } });
+  const existing = await tx.client.findFirst({ where: { originatingOpportunityId: opportunityId, organisationId } });
   if (existing) return existing;
 
-  const opportunity = await tx.opportunity.findUniqueOrThrow({ where: { id: opportunityId } });
+  // Defense-in-depth: re-verify the opportunity actually belongs to the
+  // given organisationId rather than trusting the caller's pairing — every
+  // current caller already passes a verified matched pair, but this
+  // function has no other way to catch a future caller that doesn't.
+  const opportunity = await tx.opportunity.findFirstOrThrow({ where: { id: opportunityId, organisationId } });
 
   return tx.client.create({
     data: {

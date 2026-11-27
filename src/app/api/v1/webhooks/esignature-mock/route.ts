@@ -23,7 +23,9 @@ export async function POST(request: Request) {
       await attemptGatedConversion(result.contract.organisationId, result.contract.opportunityId);
     }
 
-    return NextResponse.json(result);
+    // Minimal acknowledgement only — see src/app/api/v1/webhooks/stripe/route.ts
+    // for why the full Contract row isn't echoed back here either.
+    return NextResponse.json({ received: true });
   } catch (error) {
     return errorResponse(error);
   }
