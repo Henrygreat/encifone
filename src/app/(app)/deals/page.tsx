@@ -361,7 +361,7 @@ export default function DealsPage() {
         </div>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
-            <Button style={{ background: "var(--module-sales)" }} disabled={!pipeline}>
+            <Button style={{ background: "var(--module-sales)", color: "var(--module-on-accent)" }} disabled={!pipeline}>
               New deal
             </Button>
           </DialogTrigger>

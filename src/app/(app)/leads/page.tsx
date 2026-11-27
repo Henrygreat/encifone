@@ -363,7 +363,7 @@ export default function LeadsPage() {
           </DropdownMenu>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
-            <Button style={{ background: "var(--module-crm)" }}>New lead</Button>
+            <Button style={{ background: "var(--module-crm)", color: "var(--module-on-accent)" }}>New lead</Button>
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>

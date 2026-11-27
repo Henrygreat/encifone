@@ -176,7 +176,7 @@ export default function ServiceCataloguePage() {
         </div>
         <Dialog open={createOpen} onOpenChange={setCreateOpen}>
           <DialogTrigger asChild>
-            <Button style={{ background: "var(--module-work)" }}>New service</Button>
+            <Button style={{ background: "var(--module-work)", color: "var(--module-on-accent)" }}>New service</Button>
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>

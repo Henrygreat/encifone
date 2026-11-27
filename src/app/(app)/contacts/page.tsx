@@ -454,7 +454,7 @@ export default function ContactsPage() {
           </Button>
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger asChild>
-              <Button style={{ background: "var(--module-crm)" }}>New contact</Button>
+              <Button style={{ background: "var(--module-crm)", color: "var(--module-on-accent)" }}>New contact</Button>
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>

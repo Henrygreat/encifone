@@ -196,7 +196,7 @@ export default function ProposalsPage() {
         </div>
         <Dialog open={createOpen} onOpenChange={setCreateOpen}>
           <DialogTrigger asChild>
-            <Button style={{ background: "var(--module-sales)" }}>New proposal</Button>
+            <Button style={{ background: "var(--module-sales)", color: "var(--module-on-accent)" }}>New proposal</Button>
           </DialogTrigger>
           <DialogContent className="max-w-lg">
             <DialogHeader>

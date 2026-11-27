@@ -4,7 +4,7 @@ import { PanelLeft, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { OrgSwitcher } from "./org-switcher";
 import { UserMenu } from "./user-menu";
-import { ThemeToggle } from "./theme-toggle";
+import { ThemeSwitcher } from "./theme-switcher";
 import { MobileNav } from "./mobile-nav";
 import { NotificationCentre } from "./notification-centre";
 
@@ -48,7 +48,7 @@ export function TopBar({
 
       <div className="ml-auto flex items-center gap-2">
         <NotificationCentre />
-        <ThemeToggle />
+        <ThemeSwitcher />
         <UserMenu name={user.name} email={user.email} image={user.image} />
       </div>
     </header>

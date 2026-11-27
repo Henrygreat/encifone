@@ -310,7 +310,7 @@ export default function CompaniesPage() {
           </DropdownMenu>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
-            <Button style={{ background: "var(--module-crm)" }}>New company</Button>
+            <Button style={{ background: "var(--module-crm)", color: "var(--module-on-accent)" }}>New company</Button>
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>

@@ -2,7 +2,18 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
-@custom-variant dark (&:is(.dark *));
+/* EncifOne Aurora UI (Phase 2D, 2026-11-27) — see docs/AURORA_DESIGN_SYSTEM.md.
+   Three named, mutually-exclusive themes selected via next-themes'
+   `attribute="class"` with a custom `themes` list (src/components/providers.tsx):
+   `.aurora` (default — atmospheric, animated, premium), `.professional-dark`
+   (restrained — this is the exact token set the old, unnamed `.dark` theme
+   shipped since Phase 2A.1, carried forward verbatim, zero visual regression
+   for anyone who picks it) and `.professional-light` (clean — likewise the
+   exact old unnamed `:root` light set, carried forward verbatim). The `dark`
+   Tailwind variant matches either dark-flavoured theme, so every existing
+   `dark:` utility class in the codebase keeps working unchanged regardless
+   of which of the two dark themes is active. */
+@custom-variant dark (&:is(.aurora *, .professional-dark *));
 
 @theme inline {
   --color-background: var(--background);
@@ -57,6 +68,21 @@
   --color-module-work: var(--module-work);
   --color-module-intelligence: var(--module-intelligence);
   --color-module-admin: var(--module-admin);
+  /* Reserved for modules not yet built (Finance/Projects invoicing,
+     multi-channel Communications, Document management, a dedicated
+     Client-management group distinct from CRM) — defined now so a future
+     module slots into the existing accent system on day one instead of
+     needing a design pass of its own. Not yet consumed by any component. */
+  --color-module-finance: var(--module-finance);
+  --color-module-communications: var(--module-communications);
+  --color-module-documents: var(--module-documents);
+  --color-module-client: var(--module-client);
+  --color-module-alert: var(--module-alert);
+  /* The one foreground that's correct against EVERY module accent in EVERY
+     theme — all module accents are bright/saturated in all three themes
+     (see docs/AURORA_DESIGN_SYSTEM.md), so a single dark value needs no
+     per-theme override, unlike --primary-foreground which does vary. */
+  --color-module-on-accent: var(--module-on-accent);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -66,17 +92,24 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/* Shared across every theme — all module accents are bright/saturated
+   regardless of theme, so this one dark foreground is always correct
+   against them (see the --color-module-on-accent note above). */
 :root {
-  /* EncifOne "Intelligent Workspace" design system v3 (Phase 2A.1,
-     2026-11-26) — see docs/DESIGN_SYSTEM.md. Tenant/platform overridable
-     via Organisation.branding. Dark-first palette (Midnight/Deep Navy are
-     the brand's primary identity — see .dark below); light mode uses the
-     same accent hues on a clean light surface for consistency.
-     Primary/destructive pair with a dark foreground rather than white —
-     Emerald (#10B981) and Coral (#FB7185) both measure under 3:1 against
-     white text (checked by calculation) but over 7.8:1 against the
-     palette's own dark navy, which is the more natural pairing for a
-     "neon-on-dark" accent system anyway. */
+  --module-on-accent: #060b14;
+  --module-finance: #fbbf24;
+  --module-communications: #22d3ee;
+  --module-documents: #6366f1;
+  --module-client: #14b8a6;
+  --module-alert: #fb7185;
+}
+
+/* ---- Professional Light (the original, unnamed :root light theme from
+   Phase 2A.1 — carried forward verbatim as its own named theme). Also the
+   bare :root fallback below, so an unstamped document never renders with
+   undefined background/foreground tokens. ---- */
+:root,
+.professional-light {
   --card: #ffffff;
   --card-foreground: #0b1220;
   --popover: #ffffff;
@@ -121,7 +154,10 @@
   --module-admin: #64748b;
 }
 
-.dark {
+/* ---- Professional Dark (the original, unnamed .dark theme from Phase
+   2A.1 — carried forward verbatim as its own named theme: restrained,
+   minimal glow, high information density, no Aurora atmosphere). ---- */
+.professional-dark {
   --background: #060b14;
   --foreground: #e7ecf4;
   --card: #101827;
@@ -163,6 +199,64 @@
   --module-work: #60a5fa;
   --module-intelligence: #a78bfa;
   --module-admin: #94a3b8;
+}
+
+/* ---- Aurora — the new default theme (docs/AURORA_DESIGN_SYSTEM.md).
+   Same accent hues as Professional Dark (recognisable, not a different
+   brand), but the exact brief palette for background/surface layers, plus
+   the atmosphere this theme is named for: a slow, ambient animated
+   gradient (`.aurora-atmosphere`, defined in @layer utilities below,
+   mounted once in the app shell — never per-card), glass-panel surfaces,
+   and glow. Primary/destructive still pair with a dark foreground — the
+   bright accents measure under 3:1 against white text but well over 7:1
+   against this palette's own near-black, same reasoning as before. ---- */
+.aurora {
+  --background: #080d17;
+  --foreground: #f8fafc;
+  --card: #111c2a;
+  --card-foreground: #f8fafc;
+  --popover: #111c2a;
+  --popover-foreground: #f8fafc;
+  --primary: #10b981;
+  --primary-foreground: #060b14;
+  --secondary: #0c1422;
+  --secondary-foreground: #f8fafc;
+  --muted: #0c1422;
+  --muted-foreground: #94a3b8;
+  --accent: #162235;
+  --accent-foreground: #f8fafc;
+  --destructive: #fb7185;
+  --destructive-foreground: #060b14;
+  --border: #263449;
+  --input: #263449;
+  --ring: #10b981;
+  --success: #10b981;
+  --warning: #fbbf24;
+  --chart-1: #10b981;
+  --chart-2: #22d3ee;
+  --chart-3: #8b5cf6;
+  --chart-4: #3b82f6;
+  --chart-5: #fbbf24;
+  --shadow-elevated: 0 24px 56px -16px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(16, 185, 129, 0.04);
+  --sidebar: #0c1422;
+  --sidebar-foreground: #f8fafc;
+  --sidebar-primary: #10b981;
+  --sidebar-primary-foreground: #060b14;
+  --sidebar-accent: #162235;
+  --sidebar-accent-foreground: #f8fafc;
+  --sidebar-border: #263449;
+  --sidebar-ring: #10b981;
+  --module-overview: #22d3ee;
+  --module-crm: #fbbf24;
+  --module-sales: #10b981;
+  --module-work: #3b82f6;
+  --module-intelligence: #8b5cf6;
+  --module-admin: #94a3b8;
+  /* Aurora-exclusive: the glow colours the ambient background/intelligence
+     core animations cycle through. Unused by Professional Dark/Light. */
+  --aurora-glow-1: #10b981;
+  --aurora-glow-2: #22d3ee;
+  --aurora-glow-3: #8b5cf6;
 }
 
 @layer base {
@@ -209,7 +303,12 @@
   --input: #e2e8f0;
   --ring: #10b981;
 }
-.theme-client-portal.dark {
+/* Was `.theme-client-portal.dark` — a compound selector requiring both
+   classes on the SAME element, which never matches (the theme class lives
+   on <html>, .theme-client-portal on a nested wrapper div further down
+   the tree) — a latent no-op from before Aurora UI. Fixed to the
+   descendant form it was always meant to be. */
+:is(.aurora, .professional-dark) .theme-client-portal {
   --background: #0f172a;
   --foreground: #f1f5f9;
   --card: #1e293b;
@@ -264,5 +363,46 @@
 
   .shadow-elevated {
     box-shadow: var(--shadow-elevated);
+  }
+
+  /* Text that's always readable against a module-accent background
+     (bright/saturated in every theme) — see --color-module-on-accent. */
+  .module-accent-text {
+    color: var(--module-on-accent);
+  }
+
+  /* The Aurora theme's one piece of ambient motion: three slow-drifting
+     radial glows behind the app shell's content, never behind a single
+     card. Mounted once (src/components/app-shell/app-shell.tsx), fixed,
+     pointer-events:none, and scoped to .aurora only — Professional Dark/
+     Light render nothing here. Respects reduced motion by freezing the
+     gradient in place rather than removing it outright, so the atmosphere
+     (the point of choosing this theme) is preserved for a reduced-motion
+     user, only the drift is. */
+  .aurora-atmosphere {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 400ms ease;
+  }
+  .aurora .aurora-atmosphere {
+    opacity: 1;
+    background:
+      radial-gradient(640px 480px at 8% -8%, color-mix(in srgb, var(--aurora-glow-1) 16%, transparent), transparent 60%),
+      radial-gradient(560px 520px at 96% 8%, color-mix(in srgb, var(--aurora-glow-2) 13%, transparent), transparent 62%),
+      radial-gradient(720px 560px at 40% 108%, color-mix(in srgb, var(--aurora-glow-3) 11%, transparent), transparent 65%);
+    animation: aurora-drift 36s ease-in-out infinite alternate;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .aurora .aurora-atmosphere {
+      animation: none;
+    }
+  }
+  @keyframes aurora-drift {
+    0% { background-position: 0% 0%, 0% 0%, 0% 0%; }
+    50% { background-position: 2% 3%, -3% 2%, 1% -2%; }
+    100% { background-position: -2% -1%, 2% -2%, -1% 3%; }
   }
 }

@@ -135,7 +135,7 @@ export default function ClientsPage() {
         </div>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
-            <Button style={{ background: "var(--module-crm)" }}>New client</Button>
+            <Button style={{ background: "var(--module-crm)", color: "var(--module-on-accent)" }}>New client</Button>
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>

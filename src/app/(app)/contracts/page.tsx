@@ -193,7 +193,7 @@ export default function ContractsPage() {
         </div>
         <Dialog open={createOpen} onOpenChange={setCreateOpen}>
           <DialogTrigger asChild>
-            <Button style={{ background: "var(--module-sales)" }}>New contract</Button>
+            <Button style={{ background: "var(--module-sales)", color: "var(--module-on-accent)" }}>New contract</Button>
           </DialogTrigger>
           <DialogContent className="max-w-lg">
             <DialogHeader>

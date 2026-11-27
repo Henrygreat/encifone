@@ -13,7 +13,12 @@ export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <SessionProvider>
       <QueryClientProvider client={queryClient}>
-        <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="aurora"
+          themes={["aurora", "professional-dark", "professional-light"]}
+          disableTransitionOnChange
+        >
           <TooltipProvider>
             {children}
             <Toaster richColors position="top-right" />
