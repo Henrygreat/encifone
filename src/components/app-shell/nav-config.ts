@@ -96,7 +96,7 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { label: "Pipeline", href: "/deals", icon: KanbanSquare },
       { label: "Opportunities", href: "/deals", icon: TrendingUp },
-      { label: "Proposals", icon: FileText },
+      { label: "Proposals", href: "/proposals", icon: FileText },
       { label: "Sales Intelligence", icon: TrendingUp },
     ],
   },
@@ -109,7 +109,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { label: "Service Requests", icon: LifeBuoy },
       { label: "Helpdesk", icon: LifeBuoy },
       { label: "Workflows", icon: Workflow },
-      { label: "Service Catalogue", icon: Package },
+      { label: "Service Catalogue", href: "/service-catalogue", icon: Package },
       { label: "Knowledge Base", icon: BookOpen },
       { label: "Assets", icon: Boxes },
       { label: "Team", icon: UsersRound },
