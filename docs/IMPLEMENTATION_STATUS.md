@@ -1,6 +1,6 @@
 # Implementation Status — EncifOne
 
-_Last updated: 2026-11-26_
+_Last updated: 2026-11-27_
 
 > Rebranded from the working name "ClientOS AI" to **EncifOne** during the GitHub-integration pass (see "GitHub integration & branding" below). No database tables, Docker volumes, migration files, or other internal identifiers were renamed as part of this — see that section for exactly what was and wasn't touched, and why.
 
@@ -242,6 +242,81 @@ Milestone C is complete.
 ### Not yet started
 Auth-page visual polish (optional, lower priority — the kickoff brief's own sequencing never required it before Milestone E).
 
+## Phase 2A.1 — Premium "Intelligent Workspace" UI/UX transformation (complete, merged into `master`)
+
+Built on `feature/phase-2a1-ui-transformation`, merged into `master` by the repository owner directly (commit `f17b17f`, CI-green on all 7 required jobs) — not pushed by this session. Scope: refine Phase 2A's UI into the premium design system described in that phase's kickoff brief, without adding new domain functionality.
+
+- Fixed a real production bug: `--font-sans: var(--font-sans)` self-referenced in `globals.css` instead of `var(--font-geist-sans)`, silently falling back to the browser's serif default. Caught by inspecting actual compiled CSS output, not just source.
+- Design system v3: Midnight/Deep Navy palette, Emerald primary (with a dark foreground for AA contrast, calculated not assumed), module accent tokens, `.glass-panel`/`.gradient-border`/`.shadow-elevated` utilities, a `.theme-client-portal` variant (its own AA-corrected primary colour) — this is what Milestone 5a's public proposal page now uses.
+- App shell redesign: icon-rail-collapsible sidebar, mobile `Sheet` drawer nav, breadcrumbs, an honestly-empty notification centre popover.
+- `BentoGrid`/`BentoCard` widened to a true 12-column grid (`colSpan` 3/4/6/8/12) with an optional `glass` variant.
+- Dashboard rebuilt as a 12-col Bento layout: personalised hero, one AI-orb canvas, 8 KPI cards, a new pipeline-by-stage chart, lead-source chart, recent activity, combined priority actions (later replaced by the real Action Centre — see Phase 2B below), quick actions, an honestly-labelled "AI insights — not configured" panel.
+- React Three Fiber scenes recoloured to the v3 palette; the dashboard orb became a small pulsing "energy core" (icosahedron + two pointer-reactive orbital rings + `Sparkles`).
+- `ModulePreviewCard` (new, reusable) replaces duplicated markup across the sidebar's "planned module" rows.
+- Full local Docker validation (deps/app/worker builds, smoke test with a real auth round trip, multi-network binding test) — this work was never pushed to `master` from this session, so CI only ran on it after the owner's own merge.
+
+## Phase 2B — CRM/Sales completion (this session, 2026-11-27; all commits local to `master`, not yet pushed — see "Git state" below)
+
+Covers roadmap items 2.1 (remainder), 2.3, 2.4, 2.5, and the deterministic half of 2.8 — see `docs/MASTER_ROADMAP.md` §"Phase 2" for exact subphase numbering. **2.6 (contracts/e-signature) and the real Stripe-gated side of 2.7 (payments) are explicitly NOT built** — see "Deliberately deferred / explicitly not done" below. Eight commits, each independently typechecked/linted/tested/built and smoke-tested against the local dev server + real Postgres before the next one started; none pushed to `origin/master` — this project's git workflow (`CLAUDE.md` §"Git workflow", and the explicit instruction this slice of work was done under) has the repository owner run `git push origin master` manually.
+
+### Milestone 4a — Client 360 foundation, Service Catalogue, Proposals (schema + service + API)
+- New migration `20261126235912_client_lifecycle_catalogue_proposals_views` — purely additive (`Client`, `ClientLifecycleHistory`, `ServiceItem` + `ServiceItemPriceHistory`, `Proposal` + `ProposalVersion` + `ProposalLine`, `SavedView`). Checksum recorded.
+- **2.3 Client 360 (workspace/record only — portal access is still Phase 3, unchanged):** `src/modules/clients/`. A `Client` record is created automatically when an `Opportunity` enters an `isWon` pipeline stage (`ensureClientFromWonOpportunity`, called from `moveOpportunity`) — **this is a deliberate pragmatic substitute for 2.7's real conversion gate**, since no payment/contract-gated conversion flow exists yet. Idempotent (an opportunity can only ever originate one `Client`, enforced by a unique constraint) and documented in code/commit messages as an adaptation, not a silent scope change.
+- **2.4 Service Catalogue:** `src/modules/catalogue/`. Every price change inserts into `ServiceItemPriceHistory` rather than overwriting the current price — a proposal line copied at an earlier price can never silently drift.
+- **2.5 Proposals:** `src/modules/proposals/`. Versioned (a new version is how a sent proposal is "edited" — the previous version's lines are never mutated), a secure opaque public-link token (never the record's own id), and the public/unauthenticated `getProposalByPublicToken`/`respondToPublicProposal` functions. **Real bug found and fixed**: the public-view function returned a stale pre-update object after flipping `SENT`→`VIEWED`, so a client's first open would never show the status change — fixed to return the post-update state, re-verified live.
+- `tests/integration/clients-and-proposals.test.ts` — tenant isolation, idempotent Client creation, price-history snapshotting, the public-link viewed/responded/tampered-token paths.
+
+### Milestone 4b — Deterministic lead scoring, Action Centre (the non-AI-provider-dependent half of 2.8)
+- `src/modules/intelligence/lead-scoring.ts`: `calculateLeadScore` — explainable, rule-based (email/phone/company present, high-value source, priority, estimated value, recency, next-follow-up set), capped at 100, returns the contributing factors alongside the score. No protected characteristic is ever a factor (asserted by test). This is the "default to transparent statistical methods" fallback `docs/AI_ARCHITECTURE.md` itself prescribes when no AI provider is configured — confirmed no AI gateway/provider exists in this codebase before building this, rather than assuming it.
+- Wired into `createLead`/`updateLead` (`src/modules/crm/service.ts`) — every lead's `score` field is now real and live-computed, not a placeholder.
+- `src/modules/intelligence/action-centre.ts`: `getActionCentreItems` — overdue follow-ups, leads awaiting contact, stalled opportunities (no activity + past a staleness cutoff), deals closing soon, unassigned tasks — every item a real tenant-scoped query result, no fabricated urgency. A dead-link bug (linking to a non-existent per-activity detail page) was caught before shipping and fixed to link to the relevant list page instead.
+- `tests/unit/lead-scoring.test.ts`.
+
+### Milestone 4c — Advanced CRM segmentation (2.1 remainder: dedup/merge, CSV import/export, bulk actions, saved views)
+- `src/lib/csv.ts` — a minimal hand-written RFC4180 parser/writer (no new dependency) whose writer guards every exported cell against CSV formula injection (OWASP's leading-apostrophe mitigation for `=`/`+`/`-`/`@`/tab/CR-prefixed values) — the one explicit security item from the brief's §6 that was addressed concretely rather than deferred.
+- Contacts: bulk archive/reassign-owner/add-tag (every bulk op re-scopes to `organisationId` server-side — an id for another tenant silently has no effect, never acted on), email-based duplicate detection (read-only), and a safe merge (re-points activities/leads/opportunities/clients/proposals from the loser to the survivor inside one transaction, unions tags/emails, archives — never hard-deletes — the loser).
+- CSV import validates every row independently (bad rows skipped and reported with a row number + reason, never silently dropped or fabricated); export is formula-injection-safe.
+- Leads: the same bulk archive/reassign pattern, writing `LeadOwnershipHistory` on reassignment like the existing single-lead path.
+- `SavedView` service/API (`src/modules/views/`) — the model existed unused since the 4a migration. Org-wide ("shared") views require `CRM_MANAGE`; private views are visible only to their owner; `isDefault` is exclusive per (org, entityType, ownerId).
+- **Real bug found by the new tests, not shipped**: `bulkAddContactTag` reported `affectedCount` as the full requested id list instead of the subset actually updated (contacts that already had the tag were still counted) — fixed, re-verified.
+- `tests/integration/crm-segmentation.test.ts`.
+
+### Milestone 4d — Client 360 workspace UI, Clients list UI
+- `/clients` (search, lifecycle-stage filter, quick-create) and `/clients/[id]` — the Client 360 workspace itself: Bento overview (company/contact/owner/tags/notes/originating deal), lifecycle-history timeline, related deals, related activity, and an in-page lifecycle-stage transition control. **This is the first per-record detail page in the product** — Contacts/Companies/Leads/Opportunities are still list-only (see "Known limitations" below).
+- `nav-config.ts`: "Clients" now has a real `href`; the redundant separate "Client 360" placeholder nav item was removed (it was never a distinct destination).
+
+### Milestone 5a — Service Catalogue UI, Proposals UI, public (client-facing) proposal page
+- `/service-catalogue`: list, quick-create, a "Change price" dialog that always goes through the price-history endpoint, a "History" dialog showing every past price snapshot.
+- `/proposals`: list with a computed total (summed from the latest version's lines), multi-line quick-create (`useFieldArray`), inline status change, "Copy public link."
+- `/proposal/[token]` (outside the `(app)` route group — no sidebar, no session): the unauthenticated client-facing proposal view, wrapped in the `.theme-client-portal` palette from Phase 2A.1. Security is the opaque token itself, not a session check. This is a narrow, genuinely-finished slice of what would eventually be the full Phase 3 client portal — not a preview of it.
+- Numeric form fields (price, quantity) follow the plain-string + regex pattern already established in `deals/page.tsx`'s `valueMajor` field, not `z.coerce.number()` — avoids a resolver input/output type mismatch with react-hook-form (hit and fixed during this slice).
+
+### Milestone 5b — Wired the real Action Centre into the dashboard
+Replaced the dashboard's old "Priority actions" card (overdue tasks + upcoming follow-ups only, computed independently inside `dashboard/service.ts`) with "Needs your attention," backed by Milestone 4b's `getActionCentreItems` — the richer, already-tested signal set. This had been built with no UI consumer since 4b; closed here.
+
+### Milestone 5c — Wired CSV import/export, bulk actions, dedupe/merge into the Contacts page
+Row selection + bulk action bar (archive/reassign/tag), an "Import CSV" dialog (paste or file, shows real per-row error messages), "Export CSV" (plain anchor to the download endpoint — no client JS needed), "Find duplicates" (lists email-matched groups, merges a group into its first contact). Same gap pattern as 5b — the Milestone 4c backend had no UI consumer until this slice.
+
+### Milestone 5d — Bulk actions and a real score breakdown on the Leads page
+Row selection + bulk action bar (reusing the Milestone 4c lead endpoints). The lead score is now clickable, opening the real factor breakdown from `GET /api/v1/leads/[id]/score`. Replaced a comment left over from before Milestone 4b shipped real scoring ("Schema foundation only — real AI scoring is Phase 2.8") that had become inaccurate.
+
+### Verification discipline applied to every milestone above
+`pnpm typecheck` / `pnpm lint` / `pnpm test` (53/53 passing — 34 pre-existing + 19 new this session) / `pnpm build` all run and passing after each milestone, plus `scripts/check-migration-integrity.sh` (only Milestone 4a actually changed the schema; every later milestone re-ran it anyway as discipline). Every new API flow was additionally exercised live against the running dev server + a real local Postgres database with a real registered user and session cookie — not just unit-tested — including the fully unauthenticated public-proposal accept/decline path. Each milestone was committed to local `master` individually with a commit message naming what was built, what was verified, and any bug found/fixed in that slice.
+
+### Deliberately deferred / explicitly not done (not silently dropped)
+- **2.6 — Contracts & e-signature:** not started. No `Contract` model, no signing provider abstraction.
+- **2.7 — Payments & the real lead-to-client conversion gate:** not started. `Client` creation was pragmatically pulled forward onto "opportunity enters a Won stage" (see Milestone 4a) specifically because the real gate (Stripe test-mode + configurable contract/payment-required conversion) doesn't exist yet — when 2.7 is built, this trigger point should be reconsidered, not assumed still correct.
+- **2.8 — AI sales intelligence, the AI-provider half:** no AI gateway, no provider SDK, no pgvector-backed AI client memory. Only the deterministic/explainable fallback (Milestone 4b) exists. `docs/AI_ARCHITECTURE.md`'s full agent framework, tool registry, and autonomy-level model remain entirely unbuilt — confirmed by searching the codebase for any `src/lib/ai*`/AI SDK dependency/provider key before claiming this, not assumed.
+- **Campaign management, workflow automation, multi-channel communication history, the full client-facing portal:** out of Phase 2 scope per `docs/MASTER_ROADMAP.md` (Phase 13, Phase 8, Phase 6, Phase 3 respectively) — not implemented, per the explicit instruction not to prematurely build later-phase modules.
+- **Companies never got the bulk-action/CSV/dedupe treatment** that Contacts and Leads did in Milestones 5c/5d — Companies has no `bulk-archive` endpoint or UI at all yet. A real, scoped gap, not an oversight to hide.
+- **Saved Views has no UI consumer anywhere** despite a complete, tested backend (Milestone 4c) — no list page has a "Save this view" / "Apply a saved view" control yet.
+- **Sales velocity / stage-duration analytics** (how long a deal spends in each stage, conversion-by-stage over time) beyond the stalled-deal detection already in the Action Centre — not built.
+- **No browser is available in this working environment.** Every UI claim above is grounded in: a successful `pnpm build`, server-rendered HTML inspected directly via `curl` (confirmed real headings/content render, confirmed no actual error-boundary output despite the word "error" appearing harmlessly in Next's bundled error-boundary script), and real HTTP round trips against the backend each page calls. Actual pointer/keyboard interaction, responsive layout at specific breakpoints, and visual/colour-contrast review have not been seen rendered — same documented limitation as Phase 2A Milestone D/E above, not newly introduced.
+- **Security review (brief §6), accessibility pass (WCAG 2.2 AA/keyboard nav), and a dedicated analytics/reporting page (brief §5.9) have not been done this session** beyond what shipped incidentally (CSV formula-injection guarding, every bulk/merge op re-verifying tenant ownership server-side). These remain open work, not completed-and-unlisted.
+
+### Git state as of the end of this session
+Eight commits ahead of `origin/master` on local `master` (`62fd57a` through `165d964`), none pushed — per this slice's explicit instruction, the repository owner pushes manually (`git push origin master`). `.agents/`, `.windsurf/`, and `skills-lock.json` are untracked local tooling artifacts, deliberately left alone and excluded from every commit in this run.
+
 ## Known limitations
 
 - **No email delivery.** Invite links must be shared manually. This blocks any real multi-user onboarding until an email provider (Resend/Postmark) is wired up — planned alongside Phase 2's proposal/contract flows.
@@ -255,4 +330,11 @@ Auth-page visual polish (optional, lower priority — the kickoff brief's own se
 
 ## Recommended next step
 
-Phase 2A Milestone A (design foundation) is complete — see that section above. Next: Milestone B — CRM domain services (`src/modules/crm/`), authorization-checked API routes, and real UI for contacts/companies (list, profile, create/edit, search/filter/pagination), following the existing `src/modules/identity/` pattern. Separately, live Coolify/GitHub configuration (default branch, deploy webhook secrets, production verification) remains blocked on the user per the "Master-first Git workflow consolidation" section above — independent of Phase 2A, doesn't block UI/CRM work from continuing.
+Phase 2B (see above) has closed most of 2.1/2.3/2.4/2.5 and the deterministic half of 2.8. The highest-value, still-in-scope next slices, in roughly the order they'd naturally be tackled:
+1. Saved Views UI (backend complete, zero UI consumers) and the same bulk-action/CSV treatment for Companies that Contacts/Leads already have — both close real, explicitly-flagged gaps rather than opening new scope.
+2. Sales velocity / stage-duration analytics, and a dedicated analytics/reporting page (brief §5.9) — the dashboard currently covers point-in-time KPIs only, no date-range/comparison-period/drill-down reporting exists yet.
+3. The security review and accessibility pass called out as explicitly not done in the Phase 2B section above.
+4. 2.6 (Contracts/e-signature) and the real Stripe-gated side of 2.7 (payments) remain unstarted — these are what the Client-creation-on-Won-stage shortcut in Milestone 4a should eventually be reconciled against.
+5. 2.8's AI-provider half (an actual AI gateway, pgvector-backed client memory) is blocked on an owner decision: which provider, and building the gateway abstraction `docs/AI_ARCHITECTURE.md` specifies — not a small follow-on task.
+
+Separately, live Coolify/GitHub configuration (default branch, deploy webhook secrets, production verification) remains blocked on the user per the "Master-first Git workflow consolidation" section above — independent of Phase 2 work, doesn't block it from continuing. Eight Phase 2B commits are sitting locally on `master`, not yet pushed — see "Git state" at the end of the Phase 2B section.
