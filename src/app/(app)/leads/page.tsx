@@ -6,10 +6,12 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Select,
@@ -18,6 +20,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Table,
   TableBody,
@@ -39,6 +47,16 @@ import { BentoEmptyState } from "@/components/bento/bento-grid";
 import { formatEnumLabel } from "@/lib/utils";
 import { useDebouncedValue } from "@/lib/use-debounced-value";
 import { LEAD_STATUSES } from "@/modules/crm/constants";
+
+interface MemberOption {
+  id: string;
+  user: { name: string | null; email: string };
+}
+
+interface LeadScoreFactor {
+  label: string;
+  points: number;
+}
 
 interface LeadRow {
   id: string;
@@ -89,6 +107,8 @@ export default function LeadsPage() {
   const [page, setPage] = useState(1);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [convertingId, setConvertingId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [scoreLead, setScoreLead] = useState<LeadRow | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ["leads", debouncedSearch, status, page],
@@ -98,6 +118,25 @@ export default function LeadsPage() {
       if (status !== "ALL") params.set("status", status);
       const res = await fetch(`/api/v1/leads?${params.toString()}`);
       if (!res.ok) throw new Error("Could not load leads.");
+      return res.json();
+    },
+  });
+
+  const { data: members } = useQuery({
+    queryKey: ["members-options"],
+    queryFn: async (): Promise<{ members: MemberOption[] }> => {
+      const res = await fetch(`/api/v1/memberships`);
+      if (!res.ok) throw new Error("Could not load organisation members.");
+      return res.json();
+    },
+  });
+
+  const { data: scoreBreakdown, isLoading: scoreLoading } = useQuery({
+    enabled: Boolean(scoreLead),
+    queryKey: ["lead-score", scoreLead?.id],
+    queryFn: async (): Promise<{ score: number; factors: LeadScoreFactor[] }> => {
+      const res = await fetch(`/api/v1/leads/${scoreLead?.id}/score`);
+      if (!res.ok) throw new Error("Could not load the score breakdown.");
       return res.json();
     },
   });
@@ -153,6 +192,56 @@ export default function LeadsPage() {
       setConvertingId(null);
     }
   }
+
+  function toggleAll(items: LeadRow[], checked: boolean) {
+    setSelectedIds(checked ? new Set(items.map((l) => l.id)) : new Set());
+  }
+
+  function toggleOne(id: string, checked: boolean) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  }
+
+  async function afterBulkAction(message: string) {
+    await queryClient.invalidateQueries({ queryKey: ["leads"] });
+    setSelectedIds(new Set());
+    toast.success(message);
+  }
+
+  async function onBulkArchive() {
+    const res = await fetch(`/api/v1/leads/bulk-archive`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids: Array.from(selectedIds) }),
+    });
+    const result = await res.json();
+    if (!res.ok) {
+      toast.error(result.error ?? "Could not archive the selected leads.");
+      return;
+    }
+    await afterBulkAction(`Archived ${result.affectedCount} lead${result.affectedCount === 1 ? "" : "s"}.`);
+  }
+
+  async function onBulkReassign(ownerId: string | null) {
+    const res = await fetch(`/api/v1/leads/bulk-reassign`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids: Array.from(selectedIds), ownerId }),
+    });
+    const result = await res.json();
+    if (!res.ok) {
+      toast.error(result.error ?? "Could not reassign the selected leads.");
+      return;
+    }
+    await afterBulkAction(`Reassigned ${result.affectedCount} lead${result.affectedCount === 1 ? "" : "s"}.`);
+  }
+
+  const items = data?.items ?? [];
+  const allSelected = items.length > 0 && items.every((l) => selectedIds.has(l.id));
 
   return (
     <div className="flex flex-col gap-6 p-6">
@@ -238,6 +327,33 @@ export default function LeadsPage() {
             ))}
           </SelectContent>
         </Select>
+
+        {selectedIds.size > 0 && (
+          <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/50 px-3 py-1.5">
+            <span className="text-sm text-foreground">{selectedIds.size} selected</span>
+            <Button variant="outline" size="sm" onClick={onBulkArchive}>
+              Archive
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm">
+                  Reassign owner <ChevronDown className="size-3" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent>
+                <DropdownMenuItem onClick={() => onBulkReassign(null)}>Unassigned</DropdownMenuItem>
+                {members?.members.map((m) => (
+                  <DropdownMenuItem key={m.id} onClick={() => onBulkReassign(m.id)}>
+                    {m.user.name ?? m.user.email}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <Button variant="ghost" size="sm" onClick={() => setSelectedIds(new Set())}>
+              Clear
+            </Button>
+          </div>
+        )}
       </div>
 
       <div className="rounded-xl border border-border bg-card">
@@ -258,6 +374,9 @@ export default function LeadsPage() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-10">
+                    <Checkbox checked={allSelected} onCheckedChange={(v) => toggleAll(items, Boolean(v))} />
+                  </TableHead>
                   <TableHead>Lead</TableHead>
                   <TableHead>Company</TableHead>
                   <TableHead>Source</TableHead>
@@ -275,6 +394,12 @@ export default function LeadsPage() {
                   return (
                     <TableRow key={lead.id}>
                       <TableCell>
+                        <Checkbox
+                          checked={selectedIds.has(lead.id)}
+                          onCheckedChange={(v) => toggleOne(lead.id, Boolean(v))}
+                        />
+                      </TableCell>
+                      <TableCell>
                         <div className="flex flex-col">
                           <span className="font-medium text-foreground">{name}</span>
                           {lead.email && <span className="text-xs text-muted-foreground">{lead.email}</span>}
@@ -286,9 +411,21 @@ export default function LeadsPage() {
                       <TableCell className="text-muted-foreground">{lead.source ?? "—"}</TableCell>
                       <TableCell className="text-muted-foreground">{formatEnumLabel(lead.priority)}</TableCell>
                       <TableCell className="text-muted-foreground">
-                        {/* Schema foundation only — real AI scoring is Phase 2.8; show the raw
-                            stored value if one exists, never a fabricated figure. */}
-                        {lead.score ?? "—"}
+                        {/* Deterministic, explainable score — see
+                            src/modules/intelligence/lead-scoring.ts. Clicking
+                            it shows the real factor breakdown, never just a
+                            bare number with no explanation. */}
+                        {lead.score === null ? (
+                          "—"
+                        ) : (
+                          <button
+                            type="button"
+                            className="underline-offset-2 hover:underline"
+                            onClick={() => setScoreLead(lead)}
+                          >
+                            {lead.score}
+                          </button>
+                        )}
                       </TableCell>
                       <TableCell className="text-muted-foreground">
                         {lead.owner?.user.name ?? lead.owner?.user.email ?? "Unassigned"}
@@ -341,6 +478,39 @@ export default function LeadsPage() {
           </>
         )}
       </div>
+
+      <Dialog open={Boolean(scoreLead)} onOpenChange={(open) => !open && setScoreLead(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              Score breakdown
+              {scoreLead ? ` — ${[scoreLead.firstName, scoreLead.lastName].filter(Boolean).join(" ") || scoreLead.email}` : ""}
+            </DialogTitle>
+            <DialogDescription>
+              Deterministic and explainable — no AI provider is configured for this organisation, so this
+              is a transparent, rule-based score, not a prediction.
+            </DialogDescription>
+          </DialogHeader>
+          {scoreLoading ? (
+            <Skeleton className="h-24 w-full" />
+          ) : !scoreBreakdown || scoreBreakdown.factors.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No scoring factors apply yet.</p>
+          ) : (
+            <ul className="flex flex-col gap-1.5">
+              {scoreBreakdown.factors.map((factor, i) => (
+                <li key={i} className="flex items-center justify-between text-sm">
+                  <span className="text-foreground">{factor.label}</span>
+                  <span className="text-muted-foreground">+{factor.points}</span>
+                </li>
+              ))}
+              <li className="flex items-center justify-between border-t border-border pt-1.5 text-sm font-medium">
+                <span className="text-foreground">Total</span>
+                <span className="text-foreground">{scoreBreakdown.score}</span>
+              </li>
+            </ul>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
