@@ -144,6 +144,17 @@ model Organisation {
   assetCategories     AssetCategory[]
   assets              Asset[]
   assetActivities     AssetActivity[]
+  estimates           Estimate[]
+  estimateVersions    EstimateVersion[]
+  invoices            Invoice[]
+  invoiceLines        InvoiceLine[]
+  invoiceAllocations  InvoicePaymentAllocation[]
+  creditNotes         CreditNote[]
+  expenses            Expense[]
+  subscriptions       Subscription[]
+  subscriptionEvents  SubscriptionEvent[]
+  retainers           Retainer[]
+  retainerUsages      RetainerUsage[]
 }
 
 enum MembershipRole {
@@ -1169,6 +1180,7 @@ model SignatureRequest {
 
 enum PaymentProvider {
   STRIPE
+  MANUAL
 }
 
 enum PaymentStatus {
@@ -1176,6 +1188,14 @@ enum PaymentStatus {
   SUCCEEDED
   FAILED
   REFUNDED
+}
+
+enum PaymentMethod {
+  BANK_TRANSFER
+  CARD
+  CASH
+  STRIPE
+  OTHER
 }
 
 model Payment {
@@ -1190,6 +1210,10 @@ model Payment {
   providerPaymentId     String          @unique
   amountMinor           Int
   currency              String          @default("GBP")
+  method                PaymentMethod   @default(STRIPE)
+  externalReference     String?
+  receivedAt            DateTime?
+  receiptNumber         String?
   status                PaymentStatus   @default(PENDING)
   failureReason         String?
   createdAt             DateTime        @default(now())
@@ -1199,9 +1223,371 @@ model Payment {
   opportunity  Opportunity? @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
   company      Company?     @relation(fields: [companyId], references: [id], onDelete: SetNull)
   contact      Contact?     @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  allocations  InvoicePaymentAllocation[]
 
   @@index([organisationId, status])
   @@index([organisationId, opportunityId])
+}
+
+enum EstimateStatus {
+  DRAFT
+  SENT
+  ACCEPTED
+  REJECTED
+  EXPIRED
+  ARCHIVED
+}
+
+model Estimate {
+  id                    String         @id @default(cuid())
+  organisationId        String
+  clientId              String?
+  companyId             String?
+  contactId             String?
+  projectId             String?
+  opportunityId         String?
+  title                 String
+  status                EstimateStatus @default(DRAFT)
+  currency              String         @default("GBP")
+  validUntil            DateTime?
+  expiresAt             DateTime?
+  sentAt                DateTime?
+  respondedAt           DateTime?
+  acceptedAt            DateTime?
+  archivedAt            DateTime?
+  acceptedInvoiceId     String?
+  createdByMembershipId String?
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+
+  organisation Organisation      @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  versions     EstimateVersion[]
+
+  @@index([organisationId, status])
+  @@index([organisationId, clientId])
+}
+
+model EstimateVersion {
+  id             String   @id @default(cuid())
+  organisationId String
+  estimateId     String
+  versionNumber  Int
+  subtotalMinor  Int      @default(0)
+  discountMinor  Int      @default(0)
+  taxMinor       Int      @default(0)
+  totalMinor     Int      @default(0)
+  pricingSnapshot Json?
+  createdAt      DateTime @default(now())
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  estimate     Estimate     @relation(fields: [estimateId], references: [id], onDelete: Cascade)
+  lines        EstimateLine[]
+
+  @@unique([estimateId, versionNumber])
+  @@index([organisationId, createdAt])
+}
+
+model EstimateLine {
+  id                String @id @default(cuid())
+  estimateVersionId String
+  serviceItemId     String?
+  description       String
+  quantity          Int    @default(1)
+  unitPriceMinor    Int
+  discountMinor     Int    @default(0)
+  taxRateBps        Int    @default(0)
+  lineTotalMinor    Int
+  position          Int    @default(0)
+
+  estimateVersion EstimateVersion @relation(fields: [estimateVersionId], references: [id], onDelete: Cascade)
+
+  @@index([estimateVersionId, position])
+}
+
+enum InvoiceStatus {
+  DRAFT
+  FINALISED
+  PARTIALLY_PAID
+  PAID
+  OVERDUE
+  VOID
+  ARCHIVED
+}
+
+enum InvoiceType {
+  ONE_OFF
+  RECURRING
+}
+
+model Invoice {
+  id                    String       @id @default(cuid())
+  organisationId        String
+  estimateId            String?
+  timeEntryId           String?
+  serviceRequestId      String?
+  creationKey           String?
+  subscriptionId        String?
+  retainerId            String?
+  clientId              String?
+  companyId             String?
+  contactId             String?
+  projectId             String?
+  invoiceNumber         Int?
+  issueDate             DateTime?
+  dueDate               DateTime?
+  status                InvoiceStatus @default(DRAFT)
+  type                  InvoiceType   @default(ONE_OFF)
+  currency              String        @default("GBP")
+  subtotalMinor         Int           @default(0)
+  discountMinor         Int           @default(0)
+  taxMinor              Int           @default(0)
+  totalMinor            Int           @default(0)
+  amountPaidMinor       Int           @default(0)
+  balanceDueMinor       Int           @default(0)
+  paymentTermsDays      Int           @default(30)
+  sentAt                DateTime?
+  finalisedAt           DateTime?
+  paidAt                DateTime?
+  archivedAt            DateTime?
+  internalNotes         String?
+  createdByMembershipId String?
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+
+  organisation Organisation              @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  lines        InvoiceLine[]
+  allocations  InvoicePaymentAllocation[]
+  creditNotes  CreditNote[]
+
+  @@unique([organisationId, invoiceNumber])
+  @@unique([organisationId, timeEntryId])
+  @@unique([organisationId, serviceRequestId])
+  @@unique([organisationId, creationKey])
+  @@index([organisationId, status])
+  @@index([organisationId, clientId])
+}
+
+model InvoiceLine {
+  id             String @id @default(cuid())
+  organisationId String
+  invoiceId      String
+  serviceItemId  String?
+  description    String
+  quantity       Int    @default(1)
+  unitPriceMinor Int
+  discountMinor  Int    @default(0)
+  taxRateBps     Int    @default(0)
+  lineTotalMinor Int
+  position       Int    @default(0)
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  invoice      Invoice      @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([invoiceId, position])
+}
+
+model InvoicePaymentAllocation {
+  id                    String   @id @default(cuid())
+  organisationId        String
+  invoiceId             String
+  paymentId             String
+  amountMinor           Int
+  allocatedAt           DateTime @default(now())
+  allocatedByMembershipId String?
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  invoice      Invoice      @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  payment      Payment      @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+  @@unique([invoiceId, paymentId])
+  @@index([organisationId, allocatedAt])
+}
+
+enum CreditNoteStatus {
+  ISSUED
+  APPLIED
+  VOID
+}
+
+model CreditNote {
+  id                    String           @id @default(cuid())
+  organisationId        String
+  invoiceId             String
+  number                String
+  amountMinor           Int
+  reason                String
+  status                CreditNoteStatus @default(ISSUED)
+  issuedAt              DateTime         @default(now())
+  appliedAt             DateTime?
+  voidedAt              DateTime?
+  createdByMembershipId String?
+  createdAt             DateTime         @default(now())
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  invoice      Invoice      @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@unique([organisationId, number])
+  @@index([organisationId, status])
+}
+
+enum ExpenseStatus {
+  SUBMITTED
+  APPROVED
+  REJECTED
+  REIMBURSED
+}
+
+model Expense {
+  id                    String        @id @default(cuid())
+  organisationId        String
+  clientId              String?
+  projectId             String?
+  supplierName          String?
+  category              String
+  description           String?
+  amountMinor           Int
+  currency              String        @default("GBP")
+  expenseDate           DateTime
+  receiptStorageKey     String?
+  status                ExpenseStatus @default(SUBMITTED)
+  isBillable            Boolean       @default(false)
+  isRecurring           Boolean       @default(false)
+  recurrenceDays        Int?
+  nextOccurrenceAt      DateTime?
+  submittedByMembershipId String?
+  approvedByMembershipId  String?
+  approvedAt            DateTime?
+  reimbursedAt          DateTime?
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+
+  @@index([organisationId, status])
+  @@index([organisationId, expenseDate])
+}
+
+enum SubscriptionStatus {
+  TRIALING
+  ACTIVE
+  PAUSED
+  CANCELED
+  EXPIRED
+}
+
+enum BillingInterval {
+  MONTHLY
+  QUARTERLY
+  ANNUAL
+  CUSTOM
+}
+
+model Subscription {
+  id                    String             @id @default(cuid())
+  organisationId        String
+  clientId              String?
+  companyId             String?
+  contactId             String?
+  serviceItemId         String?
+  title                 String
+  status                SubscriptionStatus @default(TRIALING)
+  billingInterval       BillingInterval
+  intervalCount         Int                @default(1)
+  amountMinor           Int
+  currency              String             @default("GBP")
+  startDate             DateTime
+  endDate               DateTime?
+  trialEndsAt           DateTime?
+  nextBillingDate       DateTime?
+  autoRenew             Boolean            @default(true)
+  pausedAt              DateTime?
+  canceledAt            DateTime?
+  createdByMembershipId String?
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+
+  organisation Organisation       @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  events       SubscriptionEvent[]
+
+  @@index([organisationId, status])
+  @@index([organisationId, nextBillingDate])
+}
+
+model SubscriptionEvent {
+  id                    String   @id @default(cuid())
+  organisationId        String
+  subscriptionId        String
+  type                  String
+  notes                 String?
+  metadata              Json?
+  createdByMembershipId String?
+  createdAt             DateTime @default(now())
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@index([organisationId, createdAt])
+  @@index([subscriptionId, createdAt])
+}
+
+enum RetainerType {
+  FIXED_MONTHLY
+  HOUR_BASED
+  SERVICE_BASED
+}
+
+enum RetainerStatus {
+  ACTIVE
+  PAUSED
+  CANCELED
+  EXPIRED
+}
+
+model Retainer {
+  id                    String         @id @default(cuid())
+  organisationId        String
+  clientId              String?
+  title                 String
+  type                  RetainerType
+  status                RetainerStatus @default(ACTIVE)
+  currency              String         @default("GBP")
+  monthlyFeeMinor       Int?
+  includedMinutes       Int?
+  includedServices      Json?
+  overageRateMinor      Int?
+  startDate             DateTime
+  endDate               DateTime?
+  nextRenewalAt         DateTime?
+  periodStartAt         DateTime?
+  periodEndAt           DateTime?
+  usedMinutes           Int            @default(0)
+  createdByMembershipId String?
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+
+  organisation Organisation   @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  usages       RetainerUsage[]
+
+  @@index([organisationId, status])
+  @@index([organisationId, nextRenewalAt])
+}
+
+model RetainerUsage {
+  id             String   @id @default(cuid())
+  organisationId String
+  retainerId     String
+  timeEntryId    String?
+  serviceRequestId String?
+  minutesUsed    Int      @default(0)
+  overageMinor   Int      @default(0)
+  note           String?
+  occurredAt     DateTime @default(now())
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  retainer     Retainer     @relation(fields: [retainerId], references: [id], onDelete: Cascade)
+
+  @@index([organisationId, occurredAt])
+  @@index([retainerId, occurredAt])
 }
 
 // --- Inbound webhook idempotency (shared by Stripe and, once a real

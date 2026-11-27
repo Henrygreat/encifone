@@ -14,8 +14,8 @@ interface WriteAuditLogInput {
  * AuditLog rows are append-only — nothing in the codebase should ever
  * update or delete one. See docs/SECURITY.md and docs/DATABASE_SCHEMA.md.
  */
-export async function writeAuditLog(input: WriteAuditLogInput) {
-  await prisma.auditLog.create({
+export async function writeAuditLog(input: WriteAuditLogInput, db: Pick<Prisma.TransactionClient, "auditLog"> = prisma) {
+  await db.auditLog.create({
     data: {
       organisationId: input.organisationId,
       actorUserId: input.actorUserId,

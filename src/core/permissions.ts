@@ -43,6 +43,8 @@ export enum Capability {
   KNOWLEDGE_MANAGE = "knowledge:manage",
   ASSET_VIEW = "asset:view",
   ASSET_MANAGE = "asset:manage",
+  FINANCE_VIEW = "finance:view",
+  FINANCE_MANAGE = "finance:manage",
   ANALYTICS_VIEW = "analytics:view",
 }
 
@@ -74,6 +76,8 @@ const ROLE_CAPABILITIES: Record<MembershipRole, Capability[]> = {
     Capability.KNOWLEDGE_MANAGE,
     Capability.ASSET_VIEW,
     Capability.ASSET_MANAGE,
+    Capability.FINANCE_VIEW,
+    Capability.FINANCE_MANAGE,
     Capability.ANALYTICS_VIEW,
   ],
   OPERATIONS_MANAGER: [
@@ -98,6 +102,8 @@ const ROLE_CAPABILITIES: Record<MembershipRole, Capability[]> = {
     Capability.KNOWLEDGE_MANAGE,
     Capability.ASSET_VIEW,
     Capability.ASSET_MANAGE,
+    Capability.FINANCE_VIEW,
+    Capability.FINANCE_MANAGE,
     Capability.ANALYTICS_VIEW,
   ],
   SALES_MANAGER: [
@@ -111,6 +117,7 @@ const ROLE_CAPABILITIES: Record<MembershipRole, Capability[]> = {
     Capability.SERVICE_REQUEST_VIEW,
     Capability.HELPDESK_VIEW,
     Capability.KNOWLEDGE_VIEW,
+    Capability.FINANCE_VIEW,
     Capability.ANALYTICS_VIEW,
   ],
   SALES_REPRESENTATIVE: [
@@ -151,6 +158,8 @@ const ROLE_CAPABILITIES: Record<MembershipRole, Capability[]> = {
     Capability.SERVICE_REQUEST_VIEW,
     Capability.HELPDESK_VIEW,
     Capability.ASSET_VIEW,
+    Capability.FINANCE_VIEW,
+    Capability.FINANCE_MANAGE,
     Capability.ANALYTICS_VIEW,
   ],
   PROJECT_MANAGER: [
@@ -174,6 +183,8 @@ const ROLE_CAPABILITIES: Record<MembershipRole, Capability[]> = {
     Capability.KNOWLEDGE_MANAGE,
     Capability.ASSET_VIEW,
     Capability.ASSET_MANAGE,
+    Capability.FINANCE_VIEW,
+    Capability.FINANCE_MANAGE,
     Capability.ANALYTICS_VIEW,
   ],
   TEAM_MEMBER: [
@@ -206,6 +217,7 @@ const ROLE_CAPABILITIES: Record<MembershipRole, Capability[]> = {
     Capability.WORKFLOW_VIEW,
     Capability.KNOWLEDGE_VIEW,
     Capability.ASSET_VIEW,
+    Capability.FINANCE_VIEW,
     Capability.ANALYTICS_VIEW,
   ],
 };

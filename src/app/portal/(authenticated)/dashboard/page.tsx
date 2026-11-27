@@ -36,6 +36,8 @@ export default async function PortalDashboardPage() {
         <h1 className="text-2xl font-semibold tracking-tight">{profile.client.name}</h1>
       </div>
 
+      <Button asChild variant="outline" className="self-start"><Link href="/portal/finance">Invoices and estimates</Link></Button>
+
       {onboarding ? (
         <Card>
           <CardHeader>

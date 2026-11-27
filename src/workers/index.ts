@@ -1,11 +1,12 @@
 import fs from "fs";
 import path from "path";
-import { Worker } from "bullmq";
+import { Queue, Worker } from "bullmq";
 import Redis from "ioredis";
 import { env } from "@/lib/env";
 import { branding } from "@/config/branding";
 import { executeWorkflowExecution } from "@/modules/workflows/engine";
 import { prisma } from "@/lib/prisma";
+import { runScheduledRecurringBilling } from "@/modules/finance/service";
 
 /**
  * Phase 1 worker process: proves the independent-worker architecture
@@ -16,10 +17,15 @@ import { prisma } from "@/lib/prisma";
  */
 // BullMQ requires maxRetriesPerRequest: null on the connection it owns.
 const connection = new Redis(env.REDIS_URL, { maxRetriesPerRequest: null });
+const systemQueue = new Queue("system", { connection });
 
 const systemWorker = new Worker(
   "system",
   async (job) => {
+    if (job.name === "finance.recurring-billing") {
+      await runScheduledRecurringBilling();
+      return;
+    }
     if (job.name === "workflow.execute") {
       const executionId = typeof job.data?.executionId === "string" ? job.data.executionId : null;
       if (!executionId) throw new Error("workflow.execute missing executionId");
@@ -57,6 +63,25 @@ systemWorker.on("ready", () => {
   heartbeatTimer = setInterval(writeHeartbeat, HEARTBEAT_INTERVAL_MS);
 });
 
+async function scheduleBilling() {
+  try {
+    await systemQueue.upsertJobScheduler(
+      "finance-recurring-billing",
+      { every: 15 * 60 * 1000 },
+      { name: "finance.recurring-billing", opts: { attempts: 3, backoff: { type: "exponential", delay: 5000 }, removeOnComplete: 100, removeOnFail: 100 } },
+    );
+  } catch (error) {
+    console.error("[worker] could not schedule recurring billing", error);
+    process.exitCode = 1;
+    await systemWorker.close();
+    await systemQueue.close();
+    if (heartbeatTimer) clearInterval(heartbeatTimer);
+    connection.disconnect();
+  }
+}
+
+void scheduleBilling();
+
 systemWorker.on("error", (err) => {
   console.error("[worker] error", err);
 });
@@ -87,6 +112,7 @@ async function shutdown(signal: string) {
     // documented graceful-shutdown behaviour — rather than killing a job
     // mid-execution on every redeploy.
     await systemWorker.close();
+    await systemQueue.close();
   } finally {
     connection.disconnect();
     process.exit(0);

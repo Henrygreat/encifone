@@ -1,3 +1,6 @@
+import { formatFinanceMoney } from "@/lib/finance-money";
+import { Capability, roleHasCapability } from "@/core/permissions";
+import { getFinancialMetrics } from "@/modules/finance/service";
 import Link from "next/link";
 import { requireActiveMembership } from "@/core/tenancy";
 import { getServerAuthSession } from "@/lib/auth";
@@ -58,6 +61,7 @@ function resolveDisplayName(fullName: string | null | undefined, organisationNam
 
 export default async function DashboardPage() {
   const acting = await requireActiveMembership();
+  const finance = roleHasCapability(acting.role, Capability.FINANCE_VIEW) ? await getFinancialMetrics(acting) : null;
 
   const [session, organisation, memberCount, summary, actionCentreItems, velocity, aiConfig, aiEnabled, aiStatus] =
     await Promise.all([
@@ -394,6 +398,25 @@ export default async function DashboardPage() {
               <Button asChild size="sm">
                 <Link href="/members">Configure AI</Link>
               </Button>
+            </div>
+          </BentoCard>
+        )}
+        {finance && (
+          <BentoCard colSpan={12} accentModule="sales">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-sm text-muted-foreground">Monthly recurring revenue ({finance.currency})</p>
+                <p className="text-2xl font-semibold tabular-nums">{formatFinanceMoney(finance.mrrMinor, finance.currency)}</p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button asChild variant="outline"><Link href="/subscriptions">Subscriptions</Link></Button>
+                <Button asChild variant="outline"><Link href="/invoices">Invoices</Link></Button>
+                <Button asChild variant="outline"><Link href="/estimates">Estimates</Link></Button>
+                <Button asChild variant="outline"><Link href="/expenses">Expenses</Link></Button>
+                <Button asChild variant="outline"><Link href="/retainers">Retainers</Link></Button>
+                <Button asChild variant="outline"><Link href="/forecasting">Forecast</Link></Button>
+                <Button asChild variant="outline"><Link href="/profitability">Financial reporting</Link></Button>
+              </div>
             </div>
           </BentoCard>
         )}
