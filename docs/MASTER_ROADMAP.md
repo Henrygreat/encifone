@@ -73,6 +73,8 @@ Competitive research for this phase: `docs/COMPETITIVE_ANALYSIS.md` (CRM/sales-c
 Scope: narrowed from the original (Client record creation and basic AI Memory moved into Phase 2.3/2.7 above) to what's left: white-label portal shell with invitation flow, one onboarding checklist template, and deepening AI Client Memory beyond the Phase 2.8 foundation.
 **Acceptance criteria:** steps 10–11 work end-to-end; a client user can log into their portal and see only their own org/client-scoped data (verified by isolation test); internal-only fields (cost/notes) are absent from the portal API response, not just hidden in UI.
 
+Execution note (2026-11-27): an owner-requested expanded Phase 3 implementation (broader than this baseline roadmap definition) has been executed on `feature/phase-3-complete-implementation`. See `docs/PHASE_3_EXECUTION_CHECKLIST.md` and `docs/PHASE_3_CAPSTONE_REPORT.md` for delivered module boundaries and validation evidence.
+
 ### Phase 4 — Projects + Service Requests + Time + Invoicing
 Scope: Project/Task CRUD (one view type — list/board — Gantt deferred), basic service-request submission + resolution, time entry, invoice generation from completed/approved work, payment reconciliation.
 **Acceptance criteria:** steps 12–17 work end-to-end; an invoice total reconciles exactly against recorded payments in a test; no floating-point rounding defects in a seeded test matrix of amounts/currencies.

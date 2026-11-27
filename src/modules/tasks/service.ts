@@ -136,7 +136,7 @@ export async function createTask(acting: ActiveMembership, input: CreateTaskInpu
 export async function updateTask(acting: ActiveMembership, id: string, input: UpdateTaskInput) {
   requireCapability(acting, Capability.TASK_MANAGE);
 
-  const existing = await assertTaskInOrg(acting.organisationId, id);
+  await assertTaskInOrg(acting.organisationId, id);
   if (input.projectId) await assertProjectInOrg(acting.organisationId, input.projectId);
   for (const assigneeId of input.assigneeIds ?? []) await assertMembershipInOrg(acting.organisationId, assigneeId);
 

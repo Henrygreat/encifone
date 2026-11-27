@@ -1,10 +1,11 @@
-import { WorkflowExecutionStatus } from "@prisma/client";
+import { Prisma, WorkflowExecutionStatus } from "@prisma/client";
 import { writeAuditLog } from "@/core/audit";
 import { Capability } from "@/core/permissions";
 import type { ActiveMembership } from "@/core/tenancy";
 import { NotFoundError } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import { requireCapability } from "@/modules/operations/auth";
+import { enqueueSystemJob } from "@/workers/queue-client";
 import type {
   CreateWorkflowDefinitionInput,
   ListWorkflowDefinitionsQuery,
@@ -48,8 +49,8 @@ export async function createWorkflowDefinition(acting: ActiveMembership, input: 
       name: input.name,
       description: input.description,
       triggerEvent: input.triggerEvent,
-      conditions: input.conditions,
-      actions: input.actions,
+      conditions: input.conditions as Prisma.InputJsonValue | undefined,
+      actions: input.actions as Prisma.InputJsonValue,
       isTemplate: input.isTemplate ?? false,
       status: input.status,
     },
@@ -74,10 +75,14 @@ export async function updateWorkflowDefinition(
   requireCapability(acting, Capability.WORKFLOW_MANAGE);
   const existing = await assertWorkflowInOrg(acting.organisationId, id);
 
+  const { conditions, actions, ...rest } = input;
+
   const flow = await prisma.workflowDefinition.update({
     where: { id },
     data: {
-      ...input,
+      ...rest,
+      ...(conditions === undefined ? {} : { conditions: conditions as Prisma.InputJsonValue }),
+      ...(actions === undefined ? {} : { actions: actions as Prisma.InputJsonValue }),
       version: input.actions || input.conditions || input.triggerEvent ? existing.version + 1 : existing.version,
     },
   });
@@ -122,7 +127,7 @@ export async function triggerWorkflowExecution(
       workflowDefinitionId: workflowId,
       organisationId: acting.organisationId,
       idempotencyKey,
-      payload,
+      payload: payload as Prisma.InputJsonValue | undefined,
       status: WorkflowExecutionStatus.PENDING,
     },
   });
@@ -134,6 +139,17 @@ export async function triggerWorkflowExecution(
     resourceType: "WorkflowExecution",
     resourceId: execution.id,
   });
+
+  await enqueueSystemJob(
+    "workflow.execute",
+    { executionId: execution.id },
+    {
+      attempts: 5,
+      backoff: { type: "exponential", delay: 5000 },
+      removeOnComplete: true,
+      removeOnFail: false,
+    }
+  );
 
   return execution;
 }

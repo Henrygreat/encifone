@@ -51,4 +51,20 @@ describe("roleHasCapability", () => {
     expect(roleHasCapability(MembershipRole.CLIENT_USER, Capability.PORTAL_VIEW)).toBe(false);
     expect(roleHasCapability(MembershipRole.CONTRACTOR, Capability.PORTAL_VIEW)).toBe(false);
   });
+
+  it("grants operations managers full Phase 3 operations capabilities", () => {
+    expect(roleHasCapability(MembershipRole.OPERATIONS_MANAGER, Capability.PROJECT_MANAGE)).toBe(true);
+    expect(roleHasCapability(MembershipRole.OPERATIONS_MANAGER, Capability.TASK_MANAGE)).toBe(true);
+    expect(roleHasCapability(MembershipRole.OPERATIONS_MANAGER, Capability.WORKFLOW_MANAGE)).toBe(true);
+    expect(roleHasCapability(MembershipRole.OPERATIONS_MANAGER, Capability.KNOWLEDGE_MANAGE)).toBe(true);
+    expect(roleHasCapability(MembershipRole.OPERATIONS_MANAGER, Capability.ANALYTICS_VIEW)).toBe(true);
+  });
+
+  it("keeps sales representatives as view-only for core operations modules", () => {
+    expect(roleHasCapability(MembershipRole.SALES_REPRESENTATIVE, Capability.PROJECT_VIEW)).toBe(true);
+    expect(roleHasCapability(MembershipRole.SALES_REPRESENTATIVE, Capability.TASK_VIEW)).toBe(true);
+    expect(roleHasCapability(MembershipRole.SALES_REPRESENTATIVE, Capability.PROJECT_MANAGE)).toBe(false);
+    expect(roleHasCapability(MembershipRole.SALES_REPRESENTATIVE, Capability.TASK_MANAGE)).toBe(false);
+    expect(roleHasCapability(MembershipRole.SALES_REPRESENTATIVE, Capability.WORKFLOW_MANAGE)).toBe(false);
+  });
 });

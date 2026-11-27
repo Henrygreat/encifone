@@ -2,14 +2,19 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutDashboard, FileCheck2, FolderOpen, LogOut } from "lucide-react";
+import { LayoutDashboard, FileCheck2, FolderOpen, FolderKanban, LifeBuoy, BookOpen, Boxes, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { branding } from "@/config/branding";
 
 const NAV = [
   { href: "/portal/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/portal/projects", label: "Projects", icon: FolderKanban },
   { href: "/portal/onboarding", label: "Onboarding", icon: FileCheck2 },
+  { href: "/portal/service-requests", label: "Requests", icon: LifeBuoy },
+  { href: "/portal/helpdesk", label: "Support", icon: LifeBuoy },
+  { href: "/portal/knowledge", label: "Knowledge", icon: BookOpen },
+  { href: "/portal/assets", label: "Assets", icon: Boxes },
   { href: "/portal/documents", label: "Documents", icon: FolderOpen },
 ];
 

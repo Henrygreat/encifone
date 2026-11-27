@@ -4,6 +4,8 @@ import { Worker } from "bullmq";
 import Redis from "ioredis";
 import { env } from "@/lib/env";
 import { branding } from "@/config/branding";
+import { executeWorkflowExecution } from "@/modules/workflows/engine";
+import { prisma } from "@/lib/prisma";
 
 /**
  * Phase 1 worker process: proves the independent-worker architecture
@@ -18,6 +20,13 @@ const connection = new Redis(env.REDIS_URL, { maxRetriesPerRequest: null });
 const systemWorker = new Worker(
   "system",
   async (job) => {
+    if (job.name === "workflow.execute") {
+      const executionId = typeof job.data?.executionId === "string" ? job.data.executionId : null;
+      if (!executionId) throw new Error("workflow.execute missing executionId");
+      await executeWorkflowExecution(executionId);
+      return;
+    }
+
     console.log(`[worker] processed job ${job.id} (${job.name})`);
   },
   { connection }
@@ -50,6 +59,24 @@ systemWorker.on("ready", () => {
 
 systemWorker.on("error", (err) => {
   console.error("[worker] error", err);
+});
+
+systemWorker.on("failed", async (job, err) => {
+  if (!job || job.name !== "workflow.execute") return;
+  const executionId = typeof job.data?.executionId === "string" ? job.data.executionId : null;
+  if (!executionId) return;
+
+  const maxAttempts = job.opts.attempts ?? 1;
+  const status = job.attemptsMade >= maxAttempts ? "DEAD_LETTER" : "FAILED";
+  await prisma.workflowExecution.updateMany({
+    where: { id: executionId },
+    data: {
+      status,
+      lastError: err.message,
+      nextRetryAt: status === "FAILED" ? new Date(Date.now() + 5000) : null,
+      finishedAt: status === "DEAD_LETTER" ? new Date() : null,
+    },
+  });
 });
 
 async function shutdown(signal: string) {

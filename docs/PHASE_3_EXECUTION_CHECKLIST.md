@@ -21,18 +21,18 @@ This checklist reconciles the owner-requested Phase 3 expansion with the reposit
 ## Milestones
 
 - [x] 3A Service Catalogue completion (schema, service layer, APIs, migration, validation)
-- [ ] 3B Project Management core
-- [ ] 3C Task Management + My Work
-- [ ] 3D Workforce & Resource Planning
-- [ ] 3E Service Requests
-- [ ] 3F Helpdesk & Ticketing
-- [ ] 3G Workflow Automation engine
-- [ ] 3H Knowledge Base
-- [ ] 3I Asset Management
-- [ ] 3J Client Portal Phase 3 integration
-- [ ] 3K Operational Analytics
-- [ ] 3L Test hardening + integration validation + Docker verification
-- [ ] Documentation updates and capstone reports
+- [x] 3B Project Management core
+- [x] 3C Task Management + My Work
+- [x] 3D Workforce & Resource Planning
+- [x] 3E Service Requests
+- [x] 3F Helpdesk & Ticketing
+- [x] 3G Workflow Automation engine
+- [x] 3H Knowledge Base
+- [x] 3I Asset Management
+- [x] 3J Client Portal Phase 3 integration
+- [x] 3K Operational Analytics
+- [x] 3L Test hardening + integration validation
+- [x] Documentation updates and capstone reports
 
 ## Implementation Sequence
 
@@ -46,3 +46,10 @@ This checklist reconciles the owner-requested Phase 3 expansion with the reposit
 8. Add automated tests for tenant isolation, RBAC, lifecycle workflows.
 9. Run full validation suite and build.
 10. Produce final phase reports with implemented/deferred distinctions.
+
+## Validation Snapshot
+
+- `pnpm typecheck`: pass
+- `pnpm test`: pass (111/111)
+- `pnpm build`: pass
+- `pnpm lint`: pass with 2 pre-existing warnings outside Phase 3 scope (`onboarding-templates` and `activity-timeline` React Compiler watch warnings)
