@@ -4,6 +4,7 @@ import { writeAuditLog } from "@/core/audit";
 import { Capability, ForbiddenError, roleHasCapability } from "@/core/permissions";
 import type { ActiveMembership } from "@/core/tenancy";
 import { NotFoundError } from "@/lib/api";
+import { ensureClientFromWonOpportunity } from "@/modules/clients/service";
 import type {
   CreateOpportunityInput,
   CreatePipelineInput,
@@ -369,7 +370,19 @@ export async function moveOpportunity(acting: ActiveMembership, id: string, inpu
           })
         )
     );
-    return result;
+
+    // A deal entering a Won stage becomes a Client — see
+    // src/modules/clients/service.ts's doc comment for why this is
+    // triggered by "won," not payment capture (no payment provider is
+    // configured in this environment). Idempotent: an opportunity can
+    // only ever originate one Client.
+    let createdClientId: string | null = null;
+    if (targetStage.isWon) {
+      const client = await ensureClientFromWonOpportunity(tx, acting.organisationId, id);
+      createdClientId = client.id;
+    }
+
+    return { result, createdClientId };
   });
 
   await writeAuditLog({
@@ -380,6 +393,16 @@ export async function moveOpportunity(acting: ActiveMembership, id: string, inpu
     resourceId: id,
     metadata: { fromStageId: opportunity.stageId, toStageId: input.stageId },
   });
+  if (updated.createdClientId) {
+    await writeAuditLog({
+      organisationId: acting.organisationId,
+      actorUserId: acting.userId,
+      action: "client.created",
+      resourceType: "Client",
+      resourceId: updated.createdClientId,
+      metadata: { fromOpportunityId: id },
+    });
+  }
 
-  return updated;
+  return updated.result;
 }

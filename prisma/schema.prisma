@@ -94,6 +94,10 @@ model Organisation {
   pipelines     Pipeline[]
   opportunities Opportunity[]
   activities    Activity[]
+  clients       Client[]
+  serviceItems  ServiceItem[]
+  proposals     Proposal[]
+  savedViews    SavedView[]
 }
 
 enum MembershipRole {
@@ -142,6 +146,9 @@ model Membership {
   ownedLeads         Lead[]        @relation("LeadOwner")
   ownedOpportunities Opportunity[] @relation("OpportunityOwner")
   ownedActivities    Activity[]    @relation("ActivityOwner")
+  ownedClients       Client[]      @relation("ClientOwner")
+  ownedProposals     Proposal[]    @relation("ProposalOwner")
+  ownedSavedViews    SavedView[]   @relation("SavedViewOwner")
 
   @@unique([userId, organisationId])
   @@index([organisationId, status])
@@ -228,6 +235,8 @@ model Company {
   contacts       Contact[]
   leads          Lead[]
   opportunities  Opportunity[]
+  clients        Client[]
+  proposals      Proposal[]
 
   @@index([organisationId, status])
   @@index([organisationId, name])
@@ -265,6 +274,8 @@ model Contact {
   owner         Membership?   @relation("ContactOwner", fields: [ownerId], references: [id], onDelete: SetNull)
   leads         Lead[]
   opportunities Opportunity[]
+  clients       Client[]
+  proposals     Proposal[]
 
   @@index([organisationId, status])
   @@index([organisationId, companyId])
@@ -478,6 +489,8 @@ model Opportunity {
   owner        Membership?               @relation("OpportunityOwner", fields: [ownerId], references: [id], onDelete: SetNull)
   stageHistory OpportunityStageHistory[]
   activities   Activity[]
+  client       Client?
+  proposals    Proposal[]
 
   @@index([organisationId, status])
   @@index([organisationId, pipelineId, stageId, position])
@@ -567,4 +580,212 @@ model Activity {
   @@index([organisationId, entityType, entityId])
   @@index([organisationId, ownerId, status])
   @@index([organisationId, dueAt])
+}
+
+// --- Clients & lifecycle (Phase 2.3, reconciled 2026-11-27 — see docs/DECISION_LOG.md) ---
+// A Client is created when an Opportunity is marked WON, not on payment
+// capture (Phase 2.7's original trigger) — no payment provider is
+// configured in this environment (CLAUDE.md: never fabricate a working
+// integration), and "deal won" is a real signal that already exists.
+// Payment capture remains a documented future integration point, not
+// implemented here.
+
+enum ClientLifecycleStage {
+  PROSPECT
+  QUALIFIED_PROSPECT
+  OPPORTUNITY
+  WON
+  ONBOARDING
+  ACTIVE
+  GROWTH
+  AT_RISK
+  DORMANT
+  OFFBOARDING
+  FORMER
+}
+
+model Client {
+  id                       String               @id @default(cuid())
+  organisationId           String
+  companyId                String?
+  primaryContactId         String?
+  originatingOpportunityId String?              @unique
+  name                     String
+  lifecycleStage           ClientLifecycleStage @default(WON)
+  ownerId                  String?
+  tags                     String[]             @default([])
+  notes                    String?
+  createdAt                DateTime             @default(now())
+  updatedAt                DateTime             @updatedAt
+  deletedAt                DateTime?
+
+  organisation           Organisation            @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  company                Company?                @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  primaryContact         Contact?                @relation(fields: [primaryContactId], references: [id], onDelete: SetNull)
+  originatingOpportunity Opportunity?            @relation(fields: [originatingOpportunityId], references: [id], onDelete: SetNull)
+  owner                  Membership?             @relation("ClientOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  lifecycleHistory       ClientLifecycleHistory[]
+
+  @@index([organisationId, lifecycleStage])
+  @@index([organisationId, deletedAt])
+}
+
+model ClientLifecycleHistory {
+  id            String                @id @default(cuid())
+  clientId      String
+  fromStage     ClientLifecycleStage?
+  toStage       ClientLifecycleStage
+  changedAt     DateTime              @default(now())
+  changedByUserId String?
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([clientId, changedAt])
+}
+
+// --- Service catalogue (Phase 2.4) ---
+
+enum ServiceItemStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum ServiceBillingType {
+  ONE_OFF
+  RECURRING
+}
+
+model ServiceItem {
+  id             String             @id @default(cuid())
+  organisationId String
+  name           String
+  description    String?
+  sku            String?
+  unitPriceMinor Int
+  currency       String             @default("GBP")
+  billingType    ServiceBillingType @default(ONE_OFF)
+  status         ServiceItemStatus  @default(ACTIVE)
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  deletedAt      DateTime?
+
+  organisation  Organisation               @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  priceHistory  ServiceItemPriceHistory[]
+  proposalLines ProposalLine[]
+
+  @@index([organisationId, status])
+}
+
+// Historical price snapshot — per docs/MASTER_ROADMAP.md 2.4's own
+// "historical price snapshots" requirement, so a past proposal's line
+// price never silently changes when the catalogue price updates later.
+model ServiceItemPriceHistory {
+  id             String   @id @default(cuid())
+  serviceItemId  String
+  unitPriceMinor Int
+  currency       String
+  effectiveFrom  DateTime @default(now())
+
+  serviceItem ServiceItem @relation(fields: [serviceItemId], references: [id], onDelete: Cascade)
+
+  @@index([serviceItemId, effectiveFrom])
+}
+
+// --- Proposals & quotations (Phase 2.5) ---
+// E-signature (Phase 2.6) is a separate, not-yet-built capability —
+// a vendor was never chosen (docs/MASTER_ROADMAP.md §4 lists it as
+// "TBD, pending pricing/API review"). A Proposal here can be built,
+// versioned, and shared via a secure public link; nothing here claims
+// signing works.
+
+enum ProposalStatus {
+  DRAFT
+  SENT
+  VIEWED
+  ACCEPTED
+  DECLINED
+  EXPIRED
+}
+
+model Proposal {
+  id             String         @id @default(cuid())
+  organisationId String
+  opportunityId  String?
+  companyId      String?
+  contactId      String?
+  title          String
+  status         ProposalStatus @default(DRAFT)
+  currency       String         @default("GBP")
+  // Opaque, unguessable token for the secure public link — never the
+  // record's own id, which could collide with an enumerable sequence.
+  publicToken    String?        @unique
+  sentAt         DateTime?
+  viewedAt       DateTime?
+  respondedAt    DateTime?
+  expiresAt      DateTime?
+  ownerId        String?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  deletedAt      DateTime?
+
+  organisation Organisation      @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  opportunity  Opportunity?      @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+  company      Company?         @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  contact      Contact?         @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  owner        Membership?       @relation("ProposalOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  versions     ProposalVersion[]
+
+  @@index([organisationId, status])
+}
+
+model ProposalVersion {
+  id            String   @id @default(cuid())
+  proposalId    String
+  versionNumber Int
+  createdAt     DateTime @default(now())
+
+  proposal Proposal       @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  lines    ProposalLine[]
+
+  @@unique([proposalId, versionNumber])
+}
+
+model ProposalLine {
+  id                String   @id @default(cuid())
+  proposalVersionId String
+  serviceItemId     String?
+  description       String
+  quantity          Int      @default(1)
+  unitPriceMinor    Int
+  position          Int      @default(0)
+
+  proposalVersion ProposalVersion @relation(fields: [proposalVersionId], references: [id], onDelete: Cascade)
+  serviceItem     ServiceItem?    @relation(fields: [serviceItemId], references: [id], onDelete: SetNull)
+
+  @@index([proposalVersionId, position])
+}
+
+// --- Saved views / segments (Phase 2A advanced CRM) ---
+// Reuses ActivityEntityType (COMPANY/CONTACT/LEAD/OPPORTUNITY) rather than
+// a near-duplicate enum — this is exactly the set of list pages that need
+// saved filters.
+
+model SavedView {
+  id             String             @id @default(cuid())
+  organisationId String
+  // Null = shared/org-wide view; set = private to that membership.
+  ownerId        String?
+  entityType     ActivityEntityType
+  name           String
+  // Serialized filter/sort state — interpreted by the relevant list page,
+  // never executed as a query string server-side.
+  filters        Json
+  isDefault      Boolean            @default(false)
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  owner        Membership?  @relation("SavedViewOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@index([organisationId, entityType])
 }
