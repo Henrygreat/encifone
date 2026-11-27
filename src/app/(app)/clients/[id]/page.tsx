@@ -20,6 +20,9 @@ import { BentoGrid, BentoCard, BentoEmptyState } from "@/components/bento/bento-
 import { formatEnumLabel } from "@/lib/utils";
 import { formatMoneyMinor } from "@/lib/money";
 import { CLIENT_LIFECYCLE_STAGES, LIFECYCLE_STAGE_BADGE_VARIANT } from "@/modules/clients/constants";
+import { ClientOnboardingSection } from "@/components/clients/client-onboarding-section";
+import { ClientPortalAccessSection } from "@/components/clients/client-portal-access-section";
+import { ClientDocumentsSection } from "@/components/clients/client-documents-section";
 
 interface ClientDetail {
   id: string;
@@ -323,6 +326,18 @@ export default function ClientWorkspacePage() {
               ))}
             </ul>
           )}
+        </BentoCard>
+
+        <BentoCard colSpan={12} accentModule="work">
+          <ClientOnboardingSection clientId={client.id} />
+        </BentoCard>
+
+        <BentoCard colSpan={6} accentModule="work">
+          <ClientPortalAccessSection clientId={client.id} />
+        </BentoCard>
+
+        <BentoCard colSpan={6} accentModule="work">
+          <ClientDocumentsSection clientId={client.id} />
         </BentoCard>
       </BentoGrid>
     </div>

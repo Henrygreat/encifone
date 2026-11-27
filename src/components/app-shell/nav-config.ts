@@ -84,7 +84,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { label: "Companies", href: "/companies", icon: Building2 },
       { label: "Campaigns", icon: Megaphone },
       { label: "Clients", href: "/clients", icon: UsersRound },
-      { label: "Onboarding", icon: CheckSquare },
+      { label: "Onboarding", href: "/onboarding-templates", icon: CheckSquare },
       { label: "Client Portals", icon: LayoutTemplate },
       { label: "Client Success", icon: ShieldCheck },
       { label: "Reviews", icon: FileText },
