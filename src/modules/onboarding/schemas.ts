@@ -52,3 +52,8 @@ export const reviewStepSchema = z.object({
   note: z.string().max(2000).optional(),
 });
 export type ReviewStepInput = z.infer<typeof reviewStepSchema>;
+
+export const overrideStepSchema = z.object({
+  note: z.string().min(1).max(2000),
+});
+export type OverrideStepInput = z.infer<typeof overrideStepSchema>;

@@ -254,3 +254,23 @@ export async function listClientPortalUsers(acting: ActiveMembership, clientId: 
     orderBy: { createdAt: "asc" },
   });
 }
+
+/** The portal's own "/me" — resolved entirely from the verified session,
+ * never a client-supplied id. Organisation.branding (logo/colour
+ * overrides, docs/DESIGN_SYSTEM.md §6) is surfaced here so the portal
+ * shell can white-label itself; internal-only fields (notes, owner,
+ * tags) are deliberately absent from this shape. */
+export async function getPortalProfile(session: ActivePortalSession) {
+  const [portalUser, client, organisation] = await Promise.all([
+    prisma.clientPortalUser.findUniqueOrThrow({ where: { id: session.portalUserId } }),
+    prisma.client.findUniqueOrThrow({ where: { id: session.clientId } }),
+    prisma.organisation.findUniqueOrThrow({ where: { id: session.organisationId } }),
+  ]);
+
+  return {
+    email: portalUser.email,
+    name: portalUser.name,
+    client: { id: client.id, name: client.name },
+    organisation: { name: organisation.name, branding: organisation.branding },
+  };
+}

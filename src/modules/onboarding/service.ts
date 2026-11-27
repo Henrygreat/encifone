@@ -348,28 +348,22 @@ async function maybeCompleteOnboarding(onboardingId: string) {
   }
 }
 
-async function notifyStepAssignee(step: Awaited<ReturnType<typeof loadStepForActor>>, title: string) {
-  if (step.assignedTo === OnboardingAssignee.INTERNAL) {
-    if (step.onboarding.client.ownerId) {
-      await notifyMembership({
-        organisationId: step.onboarding.client.organisationId,
-        membershipId: step.onboarding.client.ownerId,
-        type: NotificationType.ONBOARDING_STEP_COMPLETED,
-        title,
-        href: `/clients/${step.onboarding.clientId}`,
-      });
-    }
-  } else {
-    const portalUser = await prisma.clientPortalUser.findFirst({ where: { clientId: step.onboarding.clientId } });
-    if (portalUser) {
-      await notifyPortalUser({
-        organisationId: step.onboarding.client.organisationId,
-        portalUserId: portalUser.id,
-        type: NotificationType.ONBOARDING_STEP_COMPLETED,
-        title,
-      });
-    }
-  }
+/** Only ever called when the client just completed one of their own
+ * (assignedTo CLIENT) steps — notifies the client's internal owner that
+ * something happened, never the client themselves (they already know;
+ * they just did it). */
+async function notifyInternalOwnerOfClientAction(
+  step: Awaited<ReturnType<typeof loadStepForActor>>,
+  title: string
+) {
+  if (!step.onboarding.client.ownerId) return;
+  await notifyMembership({
+    organisationId: step.onboarding.client.organisationId,
+    membershipId: step.onboarding.client.ownerId,
+    type: NotificationType.ONBOARDING_STEP_COMPLETED,
+    title,
+    href: `/clients/${step.onboarding.clientId}`,
+  });
 }
 
 const DERIVED_STEP_TYPES = new Set(["PROPOSAL_ACCEPTANCE", "CONTRACT_SIGNATURE", "PAYMENT"]);
@@ -423,7 +417,7 @@ export async function completeOnboardingStep(
 
   if (nextStatus === OnboardingStepStatus.COMPLETED) {
     await maybeCompleteOnboarding(step.onboardingId);
-    if (actorIsClient) await notifyStepAssignee(step, `"${step.label}" was completed by the client`);
+    if (actorIsClient) await notifyInternalOwnerOfClientAction(step, `"${step.label}" was completed by the client`);
   } else if (actorIsClient) {
     // Client submitted a requiresApproval step — notify the internal
     // owner that something needs review.

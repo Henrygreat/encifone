@@ -72,7 +72,14 @@ async function freshWonClient(acting: ActiveMembership, name: string) {
   const pipeline = await ensureDefaultPipeline(acting);
   const newStage = pipeline.stages.find((s) => s.name === "New")!;
   const wonStage = pipeline.stages.find((s) => s.isWon)!;
-  const deal = await createOpportunity(acting, { pipelineId: pipeline.id, stageId: newStage.id, name });
+  // Owned by the acting membership so the resulting Client.ownerId is
+  // set — several tests below (notification targeting) depend on that.
+  const deal = await createOpportunity(acting, {
+    pipelineId: pipeline.id,
+    stageId: newStage.id,
+    name,
+    ownerId: acting.membershipId,
+  });
   const client = await attemptGatedConversion(acting.organisationId, deal.id);
   if (!client) {
     // Default (ungated) orgs create the Client synchronously inside
@@ -255,6 +262,22 @@ describe("onboarding lifecycle and isolation", () => {
     // Client completes the simple step immediately.
     const completedWelcome = await completeOnboardingStep({ portalSession }, welcomeStep.id);
     expect(completedWelcome.status).toBe("COMPLETED");
+
+    // The client's own internal owner gets notified — never the client
+    // (who already knows; they just did it) and never some other portal
+    // user by mistake.
+    const ownerNotifications = await prisma.notification.findMany({
+      where: { recipientMembershipId: acting.membershipId, type: "ONBOARDING_STEP_COMPLETED" },
+    });
+    expect(ownerNotifications.some((n) => n.title.includes("Welcome"))).toBe(true);
+    const wrongRecipientNotifications = await prisma.notification.findMany({
+      where: {
+        organisationId: acting.organisationId,
+        recipientType: "CLIENT_PORTAL_USER",
+        type: "ONBOARDING_STEP_COMPLETED",
+      },
+    });
+    expect(wrongRecipientNotifications).toHaveLength(0);
 
     // Client submits the approval-gated step -> AWAITING_APPROVAL, not COMPLETED.
     const submitted = await completeOnboardingStep({ portalSession }, infoStep.id, { companyName: "Acme" });
