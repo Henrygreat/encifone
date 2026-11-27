@@ -81,23 +81,33 @@ model Organisation {
   branding        Json?
   defaultCurrency String   @default("GBP")
   timezone        String   @default("Europe/London")
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  // Lead-to-client conversion gating (docs/MASTER_ROADMAP.md 2.7). Both
+  // default false, matching the Phase 2B behaviour already shipped and
+  // tested (moveOpportunity creates a Client immediately on entering a
+  // Won stage) — turning either on is an explicit, additive opt-in, never
+  // a silent behaviour change for an org that hasn't configured this.
+  conversionRequiresContract Boolean  @default(false)
+  conversionRequiresPayment  Boolean  @default(false)
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
 
-  memberships   Membership[]
-  auditLogs     AuditLog[]
-  companies     Company[]
-  contacts      Contact[]
-  leads         Lead[]
-  customFields  CustomFieldDefinition[]
-  customValues  CustomFieldValue[]
-  pipelines     Pipeline[]
-  opportunities Opportunity[]
-  activities    Activity[]
-  clients       Client[]
-  serviceItems  ServiceItem[]
-  proposals     Proposal[]
-  savedViews    SavedView[]
+  memberships       Membership[]
+  auditLogs         AuditLog[]
+  companies         Company[]
+  contacts          Contact[]
+  leads             Lead[]
+  customFields      CustomFieldDefinition[]
+  customValues      CustomFieldValue[]
+  pipelines         Pipeline[]
+  opportunities     Opportunity[]
+  activities        Activity[]
+  clients           Client[]
+  serviceItems      ServiceItem[]
+  proposals         Proposal[]
+  savedViews        SavedView[]
+  contractTemplates ContractTemplate[]
+  contracts         Contract[]
+  payments          Payment[]
 }
 
 enum MembershipRole {
@@ -149,6 +159,7 @@ model Membership {
   ownedClients       Client[]      @relation("ClientOwner")
   ownedProposals     Proposal[]    @relation("ProposalOwner")
   ownedSavedViews    SavedView[]   @relation("SavedViewOwner")
+  ownedContracts     Contract[]    @relation("ContractOwner")
 
   @@unique([userId, organisationId])
   @@index([organisationId, status])
@@ -237,6 +248,8 @@ model Company {
   opportunities  Opportunity[]
   clients        Client[]
   proposals      Proposal[]
+  contracts      Contract[]
+  payments       Payment[]
 
   @@index([organisationId, status])
   @@index([organisationId, name])
@@ -276,6 +289,8 @@ model Contact {
   opportunities Opportunity[]
   clients       Client[]
   proposals     Proposal[]
+  contracts     Contract[]
+  payments      Payment[]
 
   @@index([organisationId, status])
   @@index([organisationId, companyId])
@@ -491,6 +506,8 @@ model Opportunity {
   activities   Activity[]
   client       Client?
   proposals    Proposal[]
+  contracts    Contract[]
+  payments     Payment[]
 
   @@index([organisationId, status])
   @@index([organisationId, pipelineId, stageId, position])
@@ -788,4 +805,194 @@ model SavedView {
   owner        Membership?  @relation("SavedViewOwner", fields: [ownerId], references: [id], onDelete: Cascade)
 
   @@index([organisationId, entityType])
+}
+
+// --- Contracts & e-signature (Phase 2.6, docs/MASTER_ROADMAP.md) ---
+// No real e-signature vendor is named in docs/ARCHITECTURE.md/.env.example
+// (ESIGNATURE_API_KEY is explicitly "vendor TBD") — ESignatureProviderType
+// has exactly one value (MOCK) today. The provider abstraction
+// (src/modules/contracts/esignature-provider.ts) is written so a real
+// vendor adapter is a new enum value + a new class implementing the same
+// interface, not a schema change.
+
+enum ContractTemplateStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+model ContractTemplate {
+  id             String                 @id @default(cuid())
+  organisationId String
+  name           String
+  description    String?
+  // The template body — plain text/markdown with {{variable}} placeholders
+  // resolved at contract-creation time, never by an AI call (no invented
+  // legal language — CLAUDE.md rule 4).
+  bodyMarkdown   String
+  status         ContractTemplateStatus @default(ACTIVE)
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+  deletedAt      DateTime?
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  contracts    Contract[]
+
+  @@index([organisationId, status])
+}
+
+enum ContractStatus {
+  DRAFT
+  SENT
+  VIEWED
+  SIGNED
+  DECLINED
+  VOIDED
+  EXPIRED
+}
+
+model Contract {
+  id             String         @id @default(cuid())
+  organisationId String
+  templateId     String?
+  opportunityId  String?
+  companyId      String?
+  contactId      String?
+  title          String
+  status         ContractStatus @default(DRAFT)
+  // Opaque, unguessable token for the secure public link — same pattern as
+  // Proposal.publicToken, never the record's own id.
+  publicToken    String?        @unique
+  sentAt         DateTime?
+  viewedAt       DateTime?
+  signedAt       DateTime?
+  declinedAt     DateTime?
+  voidedAt       DateTime?
+  expiresAt      DateTime?
+  ownerId        String?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  deletedAt      DateTime?
+
+  organisation      Organisation       @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  template          ContractTemplate?  @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  opportunity       Opportunity?       @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+  company           Company?           @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  contact           Contact?           @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  owner             Membership?        @relation("ContractOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  versions          ContractVersion[]
+  signatureRequests SignatureRequest[]
+
+  @@index([organisationId, status])
+  @@index([organisationId, opportunityId])
+}
+
+// Versioned the same way as ProposalVersion — a new version is how a sent
+// contract is "edited," the previous version's content is never mutated.
+model ContractVersion {
+  id            String   @id @default(cuid())
+  contractId    String
+  versionNumber Int
+  content       String
+  createdAt     DateTime @default(now())
+
+  contract Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+
+  @@unique([contractId, versionNumber])
+}
+
+enum SignatureRequestStatus {
+  PENDING
+  SIGNED
+  DECLINED
+  EXPIRED
+}
+
+enum ESignatureProviderType {
+  MOCK
+}
+
+model SignatureRequest {
+  id                String                 @id @default(cuid())
+  contractId        String
+  signerName        String
+  signerEmail       String
+  status            SignatureRequestStatus @default(PENDING)
+  provider          ESignatureProviderType @default(MOCK)
+  // Set once a real vendor is wired up — unique so an inbound webhook can
+  // always resolve back to exactly one request.
+  providerRequestId String?                @unique
+  // The mock provider's "signature" is a typed full legal name plus the
+  // signer's IP at the moment of signing — never a fabricated image/
+  // biometric claim, consistent with "no compliance/certification claims"
+  // (docs/MASTER_ROADMAP.md 2.6).
+  signedName        String?
+  signedIpAddress   String?
+  signedAt          DateTime?
+  declinedAt        DateTime?
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
+
+  contract Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+
+  @@index([contractId])
+}
+
+// --- Payments & gated conversion (Phase 2.7, docs/MASTER_ROADMAP.md) ---
+
+enum PaymentProvider {
+  STRIPE
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+  REFUNDED
+}
+
+model Payment {
+  id                    String          @id @default(cuid())
+  organisationId        String
+  opportunityId         String?
+  companyId             String?
+  contactId             String?
+  provider              PaymentProvider @default(STRIPE)
+  // Stripe's own PaymentIntent id — unique so a webhook retry or a second
+  // intent for the same conceptual payment can never double-count.
+  providerPaymentId     String          @unique
+  amountMinor           Int
+  currency              String          @default("GBP")
+  status                PaymentStatus   @default(PENDING)
+  failureReason         String?
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  opportunity  Opportunity? @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+  company      Company?     @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  contact      Contact?     @relation(fields: [contactId], references: [id], onDelete: SetNull)
+
+  @@index([organisationId, status])
+  @@index([organisationId, opportunityId])
+}
+
+// --- Inbound webhook idempotency (shared by Stripe and, once a real
+// e-signature vendor is wired up, that provider's webhooks too) ---
+
+enum WebhookProvider {
+  STRIPE
+  ESIGNATURE_MOCK
+}
+
+model IncomingWebhookEvent {
+  id              String          @id @default(cuid())
+  provider        WebhookProvider
+  // The provider's own event id (Stripe's evt_... id) — the dedupe key.
+  // A webhook retried or redelivered with the same event id is a no-op on
+  // its second+ delivery, never processed twice.
+  externalEventId String
+  receivedAt      DateTime        @default(now())
+  payload         Json?
+
+  @@unique([provider, externalEventId])
 }
