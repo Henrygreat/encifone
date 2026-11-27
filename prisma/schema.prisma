@@ -109,6 +109,9 @@ model Organisation {
   activities          Activity[]
   clients             Client[]
   serviceItems        ServiceItem[]
+  serviceCategories   ServiceCategory[]
+  servicePackages     ServicePackage[]
+  serviceSavedViews   ServiceCatalogueSavedView[]
   proposals           Proposal[]
   savedViews          SavedView[]
   contractTemplates   ContractTemplate[]
@@ -172,6 +175,7 @@ model Membership {
   ownedProposals     Proposal[]    @relation("ProposalOwner")
   ownedSavedViews    SavedView[]   @relation("SavedViewOwner")
   ownedContracts     Contract[]    @relation("ContractOwner")
+  serviceSavedViews  ServiceCatalogueSavedView[]
 
   completedOnboardingSteps ClientOnboardingStep[] @relation("StepCompletedByMembership")
   approvedOnboardingSteps  ClientOnboardingStep[] @relation("StepApprovedByMembership")
@@ -663,6 +667,7 @@ model Client {
   portalUsers            ClientPortalUser[]
   onboardings            ClientOnboarding[]
   documents              ClientDocument[]
+  linkedServices         ServiceItemClientLink[]
 
   @@index([organisationId, lifecycleStage])
   @@index([organisationId, deletedAt])
@@ -684,34 +689,85 @@ model ClientLifecycleHistory {
 // --- Service catalogue (Phase 2.4) ---
 
 enum ServiceItemStatus {
+  DRAFT
   ACTIVE
   ARCHIVED
 }
 
 enum ServiceBillingType {
   ONE_OFF
+  HOURLY
   RECURRING
+}
+
+enum ServiceCommercialModel {
+  FIXED_PRICE
+  HOURLY
+  RECURRING
+  CUSTOM_QUOTATION
+}
+
+enum ServicePackageStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
+model ServiceCategory {
+  id             String   @id @default(cuid())
+  organisationId String
+  name           String
+  description    String?
+  sortOrder      Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  serviceItems  ServiceItem[]
+  servicePackages ServicePackage[]
+
+  @@unique([organisationId, name])
+  @@index([organisationId, sortOrder])
 }
 
 model ServiceItem {
   id             String             @id @default(cuid())
   organisationId String
+  categoryId     String?
   name           String
   description    String?
+  deliverables   String?
+  estimatedDeliveryDays Int?
+  requiredSkills String[]           @default([])
   sku            String?
   unitPriceMinor Int
+  internalCostMinor Int?
   currency       String             @default("GBP")
   billingType    ServiceBillingType @default(ONE_OFF)
+  commercialModel ServiceCommercialModel @default(FIXED_PRICE)
+  slaSummary     String?
+  onboardingRequirements Json?
+  documentRequirements Json?
+  projectTemplate Json?
+  taskTemplate    Json?
+  isTemplate     Boolean            @default(false)
   status         ServiceItemStatus  @default(ACTIVE)
   createdAt      DateTime           @default(now())
   updatedAt      DateTime           @updatedAt
   deletedAt      DateTime?
 
   organisation  Organisation               @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  category      ServiceCategory?           @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   priceHistory  ServiceItemPriceHistory[]
   proposalLines ProposalLine[]
+  dependencies  ServiceDependency[]        @relation("ServiceDependenciesFrom")
+  dependents    ServiceDependency[]        @relation("ServiceDependenciesTo")
+  packageItems  ServicePackageItem[]
+  linkedClients ServiceItemClientLink[]
+  linkedContracts ServiceItemContractLink[]
 
   @@index([organisationId, status])
+  @@index([organisationId, categoryId])
 }
 
 // Historical price snapshot — per docs/MASTER_ROADMAP.md 2.4's own
@@ -727,6 +783,97 @@ model ServiceItemPriceHistory {
   serviceItem ServiceItem @relation(fields: [serviceItemId], references: [id], onDelete: Cascade)
 
   @@index([serviceItemId, effectiveFrom])
+}
+
+model ServiceDependency {
+  id                String   @id @default(cuid())
+  serviceItemId     String
+  dependsOnServiceId String
+  createdAt         DateTime @default(now())
+
+  serviceItem      ServiceItem @relation("ServiceDependenciesFrom", fields: [serviceItemId], references: [id], onDelete: Cascade)
+  dependsOnService ServiceItem @relation("ServiceDependenciesTo", fields: [dependsOnServiceId], references: [id], onDelete: Cascade)
+
+  @@unique([serviceItemId, dependsOnServiceId])
+  @@index([dependsOnServiceId])
+}
+
+model ServicePackage {
+  id             String               @id @default(cuid())
+  organisationId String
+  categoryId     String?
+  name           String
+  description    String?
+  status         ServicePackageStatus @default(DRAFT)
+  fixedPriceMinor Int?
+  currency       String               @default("GBP")
+  estimatedDeliveryDays Int?
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+  deletedAt      DateTime?
+
+  organisation Organisation       @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  category     ServiceCategory?   @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  items        ServicePackageItem[]
+
+  @@index([organisationId, status])
+  @@index([organisationId, categoryId])
+}
+
+model ServicePackageItem {
+  id               String   @id @default(cuid())
+  servicePackageId String
+  serviceItemId    String
+  quantity         Int      @default(1)
+  position         Int      @default(0)
+
+  servicePackage ServicePackage @relation(fields: [servicePackageId], references: [id], onDelete: Cascade)
+  serviceItem    ServiceItem    @relation(fields: [serviceItemId], references: [id], onDelete: Restrict)
+
+  @@unique([servicePackageId, serviceItemId])
+  @@index([servicePackageId, position])
+}
+
+model ServiceItemClientLink {
+  id            String   @id @default(cuid())
+  serviceItemId String
+  clientId      String
+  createdAt     DateTime @default(now())
+
+  serviceItem ServiceItem @relation(fields: [serviceItemId], references: [id], onDelete: Cascade)
+  client      Client      @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@unique([serviceItemId, clientId])
+  @@index([clientId])
+}
+
+model ServiceItemContractLink {
+  id            String   @id @default(cuid())
+  serviceItemId String
+  contractId    String
+  createdAt     DateTime @default(now())
+
+  serviceItem ServiceItem @relation(fields: [serviceItemId], references: [id], onDelete: Cascade)
+  contract    Contract    @relation(fields: [contractId], references: [id], onDelete: Cascade)
+
+  @@unique([serviceItemId, contractId])
+  @@index([contractId])
+}
+
+model ServiceCatalogueSavedView {
+  id             String   @id @default(cuid())
+  organisationId String
+  ownerId        String?
+  name           String
+  filters        Json
+  isDefault      Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  owner        Membership?  @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@index([organisationId])
 }
 
 // --- Proposals & quotations (Phase 2.5) ---
@@ -902,6 +1049,7 @@ model Contract {
   owner             Membership?        @relation("ContractOwner", fields: [ownerId], references: [id], onDelete: SetNull)
   versions          ContractVersion[]
   signatureRequests SignatureRequest[]
+  linkedServices    ServiceItemContractLink[]
 
   @@index([organisationId, status])
   @@index([organisationId, opportunityId])
