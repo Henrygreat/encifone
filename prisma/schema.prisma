@@ -123,6 +123,27 @@ model Organisation {
   clientDocuments     ClientDocument[]
   notifications       Notification[]
   aiUsageLogs       AIUsageLog[]
+  departments         Department[]
+  teams               Team[]
+  membershipProfiles  MembershipProfile[]
+  projects            Project[]
+  projectMilestones   ProjectMilestone[]
+  projectRisksIssues  ProjectRiskIssue[]
+  projectNotes        ProjectNote[]
+  tasks               Task[]
+  taskLabels          TaskLabel[]
+  taskComments        TaskComment[]
+  timeEntries         TimeEntry[]
+  serviceRequests     ServiceRequest[]
+  helpdeskTickets     HelpdeskTicket[]
+  workflowDefinitions WorkflowDefinition[]
+  workflowExecutions  WorkflowExecution[]
+  knowledgeCategories KnowledgeCategory[]
+  knowledgeArticles   KnowledgeArticle[]
+  knowledgeFeedback   KnowledgeArticleFeedback[]
+  assetCategories     AssetCategory[]
+  assets              Asset[]
+  assetActivities     AssetActivity[]
 }
 
 enum MembershipRole {
@@ -182,6 +203,34 @@ model Membership {
   uploadedDocuments        ClientDocument[]       @relation("DocumentUploadedByMembership")
   reviewedDocuments        ClientDocument[]       @relation("DocumentReviewedByMembership")
   receivedNotifications    Notification[]         @relation("NotificationRecipientMembership")
+  membershipProfile        MembershipProfile?
+  teamMemberships          TeamMembership[]
+  managedProjects          Project[]              @relation("ProjectManager")
+  projectMemberships       ProjectMember[]
+  projectRiskOwnerships    ProjectRiskIssue[]     @relation("ProjectRiskOwner")
+  projectNoteAuthorships   ProjectNote[]          @relation("ProjectNoteAuthor")
+  createdTasks             Task[]                 @relation("TaskCreatedBy")
+  taskAssignments          TaskAssignee[]
+  taskWatchings            TaskWatcher[]
+  taskCommentAuthorships   TaskComment[]          @relation("TaskCommentAuthor")
+  timeEntries              TimeEntry[]
+  approvedTimeEntries      TimeEntry[]            @relation("TimeEntryApprover")
+  serviceRequestAssignments ServiceRequest[]      @relation("ServiceRequestAssignee")
+  serviceRequestRequests    ServiceRequest[]      @relation("ServiceRequestRequesterMembership")
+  serviceRequestApprovals  ServiceRequest[]       @relation("ServiceRequestApprover")
+  serviceRequestComments   ServiceRequestComment[] @relation("ServiceRequestCommentAuthorMembership")
+  helpdeskTicketAssignments HelpdeskTicket[]      @relation("TicketAssignee")
+  helpdeskReplies          TicketComment[]        @relation("TicketCommentAuthorMembership")
+  mergedTickets            TicketMerge[]          @relation("TicketMergedBy")
+  workflowApprovals        WorkflowExecution[]    @relation("WorkflowApprovedBy")
+  knowledgeArticlesOwned   KnowledgeArticle[]     @relation("KnowledgeArticleOwner")
+  knowledgeVersionsAuthored KnowledgeArticleVersion[] @relation("KnowledgeVersionAuthor")
+  knowledgeFeedback        KnowledgeArticleFeedback[] @relation("KnowledgeFeedbackMembership")
+  assetAssignments         Asset[]                @relation("AssetAssignedToMembership")
+  assetActivities          AssetActivity[]        @relation("AssetActivityMembership")
+  assetAssignmentFrom      AssetAssignmentHistory[] @relation("AssetFromMembership")
+  assetAssignmentTo        AssetAssignmentHistory[] @relation("AssetToMembership")
+  assetAssignmentChangedBy AssetAssignmentHistory[] @relation("AssetChangedByMembership")
 
   @@unique([userId, organisationId])
   @@index([organisationId, status])
@@ -268,6 +317,7 @@ model Company {
   contacts       Contact[]
   leads          Lead[]
   opportunities  Opportunity[]
+  projects       Project[]
   clients        Client[]
   proposals      Proposal[]
   contracts      Contract[]
@@ -309,6 +359,7 @@ model Contact {
   owner         Membership?   @relation("ContactOwner", fields: [ownerId], references: [id], onDelete: SetNull)
   leads         Lead[]
   opportunities Opportunity[]
+  projectsAsPrimaryContact Project[]
   clients       Client[]
   proposals     Proposal[]
   contracts     Contract[]
@@ -668,6 +719,10 @@ model Client {
   onboardings            ClientOnboarding[]
   documents              ClientDocument[]
   linkedServices         ServiceItemClientLink[]
+  projects               Project[]
+  serviceRequests        ServiceRequest[]
+  helpdeskTickets        HelpdeskTicket[]
+  assets                 Asset[]
 
   @@index([organisationId, lifecycleStage])
   @@index([organisationId, deletedAt])
@@ -765,6 +820,8 @@ model ServiceItem {
   packageItems  ServicePackageItem[]
   linkedClients ServiceItemClientLink[]
   linkedContracts ServiceItemContractLink[]
+  sourceProjects Project[]
+  serviceRequests ServiceRequest[]
 
   @@index([organisationId, status])
   @@index([organisationId, categoryId])
@@ -919,6 +976,7 @@ model Proposal {
   contact      Contact?         @relation(fields: [contactId], references: [id], onDelete: SetNull)
   owner        Membership?       @relation("ProposalOwner", fields: [ownerId], references: [id], onDelete: SetNull)
   versions     ProposalVersion[]
+  sourceProjects Project[]
 
   @@index([organisationId, status])
 }
@@ -1050,6 +1108,7 @@ model Contract {
   versions          ContractVersion[]
   signatureRequests SignatureRequest[]
   linkedServices    ServiceItemContractLink[]
+  sourceProjects    Project[]
 
   @@index([organisationId, status])
   @@index([organisationId, opportunityId])
@@ -1259,6 +1318,10 @@ model ClientPortalUser {
   uploadedDocuments     ClientDocument[]        @relation("DocumentUploadedByPortalUser")
   completedSteps        ClientOnboardingStep[]  @relation("StepCompletedByPortalUser")
   receivedNotifications Notification[]          @relation("NotificationRecipientPortalUser")
+  submittedServiceRequests ServiceRequest[]     @relation("ServiceRequestRequesterPortalUser")
+  serviceRequestComments    ServiceRequestComment[] @relation("ServiceRequestCommentAuthorPortalUser")
+  helpdeskReplies         TicketComment[]       @relation("TicketCommentAuthorPortalUser")
+  knowledgeFeedback       KnowledgeArticleFeedback[] @relation("KnowledgeFeedbackPortalUser")
 
   @@index([organisationId])
   @@index([clientId])
@@ -1537,4 +1600,851 @@ model Notification {
 
   @@index([organisationId, recipientMembershipId, readAt])
   @@index([organisationId, recipientPortalUserId, readAt])
+}
+
+// --- Phase 3: Work management, service operations and delivery ---
+
+enum TeamMemberClassification {
+  EMPLOYEE
+  CONTRACTOR
+}
+
+model Department {
+  id             String   @id @default(cuid())
+  organisationId String
+  name           String
+  description    String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  teams        Team[]
+
+  @@unique([organisationId, name])
+  @@index([organisationId])
+}
+
+model Team {
+  id             String   @id @default(cuid())
+  organisationId String
+  departmentId   String?
+  name           String
+  description    String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organisation     Organisation     @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  department       Department?      @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  members          TeamMembership[]
+  serviceRequests  ServiceRequest[]
+  helpdeskTickets  HelpdeskTicket[]
+
+  @@unique([organisationId, name])
+  @@index([organisationId])
+}
+
+model TeamMembership {
+  id           String   @id @default(cuid())
+  teamId       String
+  membershipId String
+  createdAt    DateTime @default(now())
+
+  team       Team       @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  membership Membership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, membershipId])
+  @@index([membershipId])
+}
+
+model MembershipProfile {
+  id                  String                   @id @default(cuid())
+  organisationId      String
+  membershipId        String                   @unique
+  classification      TeamMemberClassification @default(EMPLOYEE)
+  skills              String[]                 @default([])
+  weeklyCapacityHours Int                      @default(40)
+  workingHours        Json?
+  createdAt           DateTime                 @default(now())
+  updatedAt           DateTime                 @updatedAt
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  membership   Membership   @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+
+  @@index([organisationId])
+}
+
+enum ProjectStatus {
+  DRAFT
+  ACTIVE
+  ON_HOLD
+  COMPLETED
+  ARCHIVED
+}
+
+enum ProjectPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum ProjectHealth {
+  ON_TRACK
+  AT_RISK
+  OFF_TRACK
+  BLOCKED
+}
+
+model Project {
+  id                     String          @id @default(cuid())
+  organisationId         String
+  clientId               String?
+  companyId              String?
+  primaryContactId       String?
+  sourceProposalId       String?
+  sourceContractId       String?
+  sourceServiceItemId    String?
+  name                   String
+  description            String?
+  status                 ProjectStatus   @default(DRAFT)
+  priority               ProjectPriority @default(MEDIUM)
+  health                 ProjectHealth   @default(ON_TRACK)
+  startDate              DateTime?
+  dueDate                DateTime?
+  completedAt            DateTime?
+  budgetMinor            Int?
+  estimatedCostMinor     Int?
+  currency               String          @default("GBP")
+  projectManagerId       String?
+  isClientVisible        Boolean         @default(false)
+  progressPercent        Int             @default(0)
+  templateData           Json?
+  archivedAt             DateTime?
+  createdAt              DateTime        @default(now())
+  updatedAt              DateTime        @updatedAt
+
+  organisation      Organisation       @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  client            Client?            @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  company           Company?           @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  primaryContact    Contact?           @relation(fields: [primaryContactId], references: [id], onDelete: SetNull)
+  sourceProposal    Proposal?          @relation(fields: [sourceProposalId], references: [id], onDelete: SetNull)
+  sourceContract    Contract?          @relation(fields: [sourceContractId], references: [id], onDelete: SetNull)
+  sourceServiceItem ServiceItem?       @relation(fields: [sourceServiceItemId], references: [id], onDelete: SetNull)
+  projectManager    Membership?        @relation("ProjectManager", fields: [projectManagerId], references: [id], onDelete: SetNull)
+  milestones        ProjectMilestone[]
+  members           ProjectMember[]
+  dependencies      ProjectDependency[] @relation("ProjectDependsOn")
+  dependents        ProjectDependency[] @relation("ProjectRequiredBy")
+  notes             ProjectNote[]
+  risksIssues       ProjectRiskIssue[]
+  tasks             Task[]
+  timeEntries       TimeEntry[]
+  serviceRequests   ServiceRequest[]
+
+  @@index([organisationId, status])
+  @@index([organisationId, dueDate])
+}
+
+model ProjectMember {
+  id           String   @id @default(cuid())
+  projectId    String
+  membershipId String
+  role         String?
+  createdAt    DateTime @default(now())
+
+  project    Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  membership Membership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, membershipId])
+  @@index([membershipId])
+}
+
+enum ProjectMilestoneStatus {
+  PLANNED
+  IN_PROGRESS
+  COMPLETED
+  BLOCKED
+}
+
+model ProjectMilestone {
+  id             String                 @id @default(cuid())
+  organisationId String
+  projectId      String
+  title          String
+  description    String?
+  status         ProjectMilestoneStatus @default(PLANNED)
+  dueDate        DateTime?
+  completedAt    DateTime?
+  progressPercent Int                   @default(0)
+  isClientVisible Boolean               @default(false)
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  project      Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([organisationId, projectId, status])
+}
+
+model ProjectDependency {
+  id                 String   @id @default(cuid())
+  projectId          String
+  dependsOnProjectId String
+  createdAt          DateTime @default(now())
+
+  project          Project @relation("ProjectDependsOn", fields: [projectId], references: [id], onDelete: Cascade)
+  dependsOnProject Project @relation("ProjectRequiredBy", fields: [dependsOnProjectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, dependsOnProjectId])
+  @@index([dependsOnProjectId])
+}
+
+enum ProjectRiskType {
+  RISK
+  ISSUE
+  BLOCKER
+}
+
+enum ProjectRiskStatus {
+  OPEN
+  MITIGATING
+  RESOLVED
+  CLOSED
+}
+
+model ProjectRiskIssue {
+  id             String            @id @default(cuid())
+  organisationId String
+  projectId      String
+  ownerId        String?
+  type           ProjectRiskType
+  status         ProjectRiskStatus @default(OPEN)
+  title          String
+  description    String?
+  isClientVisible Boolean          @default(false)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  project      Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  owner        Membership?  @relation("ProjectRiskOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+
+  @@index([organisationId, projectId, status])
+}
+
+model ProjectNote {
+  id              String   @id @default(cuid())
+  organisationId  String
+  projectId       String
+  authorId        String?
+  body            String
+  isClientVisible Boolean  @default(false)
+  createdAt       DateTime @default(now())
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  project      Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  author       Membership?  @relation("ProjectNoteAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+
+  @@index([organisationId, projectId, createdAt])
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  BLOCKED
+  APPROVAL_PENDING
+  DONE
+  REOPENED
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+model Task {
+  id                    String       @id @default(cuid())
+  organisationId        String
+  projectId             String?
+  parentTaskId          String?
+  createdByMembershipId String?
+  title                 String
+  description           String?
+  status                TaskStatus   @default(TODO)
+  priority              TaskPriority @default(MEDIUM)
+  startDate             DateTime?
+  dueDate               DateTime?
+  completedAt           DateTime?
+  estimatedMinutes      Int?
+  actualMinutes         Int?
+  isRecurring           Boolean      @default(false)
+  recurrenceRule        String?
+  blockedReason         String?
+  approvalRequired      Boolean      @default(false)
+  createdAt             DateTime     @default(now())
+  updatedAt             DateTime     @updatedAt
+  deletedAt             DateTime?
+
+  organisation  Organisation      @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  project       Project?          @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  parentTask    Task?             @relation("TaskParent", fields: [parentTaskId], references: [id], onDelete: SetNull)
+  subtasks      Task[]            @relation("TaskParent")
+  createdBy     Membership?       @relation("TaskCreatedBy", fields: [createdByMembershipId], references: [id], onDelete: SetNull)
+  assignees     TaskAssignee[]
+  dependencies  TaskDependency[]  @relation("TaskDependsOn")
+  dependents    TaskDependency[]  @relation("TaskRequiredBy")
+  checklistItems TaskChecklistItem[]
+  comments      TaskComment[]
+  watchers      TaskWatcher[]
+  labels        TaskToLabel[]
+  timeEntries   TimeEntry[]
+
+  @@index([organisationId, status])
+  @@index([organisationId, dueDate])
+}
+
+model TaskAssignee {
+  id           String   @id @default(cuid())
+  taskId       String
+  membershipId String
+  createdAt    DateTime @default(now())
+
+  task       Task       @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  membership Membership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, membershipId])
+  @@index([membershipId])
+}
+
+model TaskDependency {
+  id              String   @id @default(cuid())
+  taskId          String
+  dependsOnTaskId String
+  createdAt       DateTime @default(now())
+
+  task          Task @relation("TaskDependsOn", fields: [taskId], references: [id], onDelete: Cascade)
+  dependsOnTask Task @relation("TaskRequiredBy", fields: [dependsOnTaskId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, dependsOnTaskId])
+  @@index([dependsOnTaskId])
+}
+
+model TaskChecklistItem {
+  id        String   @id @default(cuid())
+  taskId    String
+  label     String
+  isDone    Boolean  @default(false)
+  position  Int      @default(0)
+  createdAt DateTime @default(now())
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId, position])
+}
+
+model TaskComment {
+  id             String   @id @default(cuid())
+  organisationId String
+  taskId         String
+  authorId       String?
+  body           String
+  isInternal     Boolean  @default(true)
+  createdAt      DateTime @default(now())
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  task         Task         @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  author       Membership?  @relation("TaskCommentAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+
+  @@index([organisationId, taskId, createdAt])
+}
+
+model TaskWatcher {
+  id           String   @id @default(cuid())
+  taskId       String
+  membershipId String
+  createdAt    DateTime @default(now())
+
+  task       Task       @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  membership Membership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, membershipId])
+  @@index([membershipId])
+}
+
+model TaskLabel {
+  id             String   @id @default(cuid())
+  organisationId String
+  name           String
+  color          String?
+  createdAt      DateTime @default(now())
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  tasks        TaskToLabel[]
+
+  @@unique([organisationId, name])
+  @@index([organisationId])
+}
+
+model TaskToLabel {
+  id      String @id @default(cuid())
+  taskId  String
+  labelId String
+
+  task  Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  label TaskLabel @relation(fields: [labelId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, labelId])
+  @@index([labelId])
+}
+
+enum TimeEntryApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model TimeEntry {
+  id                   String                  @id @default(cuid())
+  organisationId       String
+  taskId               String?
+  projectId            String?
+  membershipId         String
+  approvedByMembershipId String?
+  workDate             DateTime
+  minutes              Int
+  isBillable           Boolean                 @default(true)
+  approvalStatus       TimeEntryApprovalStatus @default(PENDING)
+  notes                String?
+  approvedAt           DateTime?
+  createdAt            DateTime                @default(now())
+  updatedAt            DateTime                @updatedAt
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  task         Task?        @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  project      Project?     @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  membership   Membership   @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  approvedBy   Membership?  @relation("TimeEntryApprover", fields: [approvedByMembershipId], references: [id], onDelete: SetNull)
+
+  @@index([organisationId, workDate])
+  @@index([organisationId, approvalStatus])
+}
+
+enum ServiceRequestStatus {
+  SUBMITTED
+  TRIAGED
+  AWAITING_APPROVAL
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum ServiceRequestPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum ServiceRequestUrgency {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+model ServiceRequest {
+  id                   String                  @id @default(cuid())
+  organisationId       String
+  clientId             String
+  serviceItemId        String?
+  projectId            String?
+  assignedTeamId       String?
+  assignedMembershipId String?
+  requesterPortalUserId String?
+  requesterMembershipId String?
+  approvedByMembershipId String?
+  title                String
+  description          String?
+  category             String?
+  priority             ServiceRequestPriority  @default(MEDIUM)
+  urgency              ServiceRequestUrgency   @default(MEDIUM)
+  status               ServiceRequestStatus    @default(SUBMITTED)
+  slaDueAt             DateTime?
+  approvedAt           DateTime?
+  resolvedAt           DateTime?
+  feedbackScore        Int?
+  feedbackComment      String?
+  createdAt            DateTime                @default(now())
+  updatedAt            DateTime                @updatedAt
+
+  organisation        Organisation     @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  client              Client           @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  serviceItem         ServiceItem?     @relation(fields: [serviceItemId], references: [id], onDelete: SetNull)
+  project             Project?         @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  assignedTeam        Team?            @relation(fields: [assignedTeamId], references: [id], onDelete: SetNull)
+  assignedMembership  Membership?      @relation("ServiceRequestAssignee", fields: [assignedMembershipId], references: [id], onDelete: SetNull)
+  requesterPortalUser ClientPortalUser? @relation("ServiceRequestRequesterPortalUser", fields: [requesterPortalUserId], references: [id], onDelete: SetNull)
+  requesterMembership Membership?      @relation("ServiceRequestRequesterMembership", fields: [requesterMembershipId], references: [id], onDelete: SetNull)
+  approvedByMembership Membership?     @relation("ServiceRequestApprover", fields: [approvedByMembershipId], references: [id], onDelete: SetNull)
+  comments            ServiceRequestComment[]
+  tickets             HelpdeskTicket[]
+
+  @@index([organisationId, status])
+  @@index([organisationId, clientId, createdAt])
+}
+
+model ServiceRequestComment {
+  id                 String   @id @default(cuid())
+  serviceRequestId   String
+  authorMembershipId String?
+  authorPortalUserId String?
+  body               String
+  isInternal         Boolean  @default(false)
+  createdAt          DateTime @default(now())
+
+  serviceRequest   ServiceRequest  @relation(fields: [serviceRequestId], references: [id], onDelete: Cascade)
+  authorMembership Membership?     @relation("ServiceRequestCommentAuthorMembership", fields: [authorMembershipId], references: [id], onDelete: SetNull)
+  authorPortalUser ClientPortalUser? @relation("ServiceRequestCommentAuthorPortalUser", fields: [authorPortalUserId], references: [id], onDelete: SetNull)
+
+  @@index([serviceRequestId, createdAt])
+}
+
+enum TicketStatus {
+  OPEN
+  PENDING
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+  REOPENED
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum TicketSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+model HelpdeskTicket {
+  id                   String         @id @default(cuid())
+  organisationId       String
+  serviceRequestId     String?
+  clientId             String?
+  assetId              String?
+  assignedTeamId       String?
+  assignedMembershipId String?
+  reference            String
+  subject              String
+  description          String?
+  category             String?
+  queue                String?
+  status               TicketStatus   @default(OPEN)
+  priority             TicketPriority @default(MEDIUM)
+  severity             TicketSeverity @default(MEDIUM)
+  slaDueAt             DateTime?
+  firstResponseAt      DateTime?
+  resolvedAt           DateTime?
+  closedAt             DateTime?
+  csatScore            Int?
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+
+  organisation       Organisation      @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  serviceRequest     ServiceRequest?   @relation(fields: [serviceRequestId], references: [id], onDelete: SetNull)
+  client             Client?           @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  asset              Asset?            @relation(fields: [assetId], references: [id], onDelete: SetNull)
+  assignedTeam       Team?             @relation(fields: [assignedTeamId], references: [id], onDelete: SetNull)
+  assignedMembership Membership?       @relation("TicketAssignee", fields: [assignedMembershipId], references: [id], onDelete: SetNull)
+  comments           TicketComment[]
+  relations          TicketRelation[]  @relation("TicketRelationsFrom")
+  relatedTo          TicketRelation[]  @relation("TicketRelationsTo")
+  mergeSources       TicketMerge[]     @relation("TicketMergeSource")
+  mergeTargets       TicketMerge[]     @relation("TicketMergeTarget")
+
+  @@unique([organisationId, reference])
+  @@index([organisationId, status])
+}
+
+model TicketComment {
+  id                 String   @id @default(cuid())
+  ticketId           String
+  authorMembershipId String?
+  authorPortalUserId String?
+  body               String
+  isInternal         Boolean  @default(true)
+  createdAt          DateTime @default(now())
+
+  ticket           HelpdeskTicket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  authorMembership Membership?      @relation("TicketCommentAuthorMembership", fields: [authorMembershipId], references: [id], onDelete: SetNull)
+  authorPortalUser ClientPortalUser? @relation("TicketCommentAuthorPortalUser", fields: [authorPortalUserId], references: [id], onDelete: SetNull)
+
+  @@index([ticketId, createdAt])
+}
+
+model TicketRelation {
+  id              String   @id @default(cuid())
+  ticketId        String
+  relatedTicketId String
+  relationType    String
+  createdAt       DateTime @default(now())
+
+  ticket        HelpdeskTicket @relation("TicketRelationsFrom", fields: [ticketId], references: [id], onDelete: Cascade)
+  relatedTicket HelpdeskTicket @relation("TicketRelationsTo", fields: [relatedTicketId], references: [id], onDelete: Cascade)
+
+  @@unique([ticketId, relatedTicketId])
+  @@index([relatedTicketId])
+}
+
+model TicketMerge {
+  id                 String   @id @default(cuid())
+  sourceTicketId     String
+  targetTicketId     String
+  mergedByMembershipId String?
+  reason             String?
+  mergedAt           DateTime @default(now())
+
+  sourceTicket HelpdeskTicket @relation("TicketMergeSource", fields: [sourceTicketId], references: [id], onDelete: Cascade)
+  targetTicket HelpdeskTicket @relation("TicketMergeTarget", fields: [targetTicketId], references: [id], onDelete: Cascade)
+  mergedBy     Membership?    @relation("TicketMergedBy", fields: [mergedByMembershipId], references: [id], onDelete: SetNull)
+
+  @@index([targetTicketId])
+}
+
+enum WorkflowStatus {
+  ACTIVE
+  DISABLED
+}
+
+enum WorkflowExecutionStatus {
+  PENDING
+  RUNNING
+  WAITING_APPROVAL
+  SUCCEEDED
+  FAILED
+  DEAD_LETTER
+}
+
+model WorkflowDefinition {
+  id             String         @id @default(cuid())
+  organisationId String
+  name           String
+  description    String?
+  triggerEvent   String
+  conditions     Json?
+  actions        Json
+  isTemplate     Boolean        @default(false)
+  status         WorkflowStatus @default(ACTIVE)
+  version        Int            @default(1)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  organisation Organisation       @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  executions   WorkflowExecution[]
+
+  @@unique([organisationId, name])
+  @@index([organisationId, status])
+}
+
+model WorkflowExecution {
+  id                    String                  @id @default(cuid())
+  workflowDefinitionId  String
+  organisationId        String
+  approvedByMembershipId String?
+  status                WorkflowExecutionStatus @default(PENDING)
+  idempotencyKey        String?
+  payload               Json?
+  attemptCount          Int                     @default(0)
+  nextRetryAt           DateTime?
+  lastError             String?
+  startedAt             DateTime?
+  finishedAt            DateTime?
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime                @updatedAt
+
+  workflowDefinition WorkflowDefinition @relation(fields: [workflowDefinitionId], references: [id], onDelete: Cascade)
+  organisation       Organisation       @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  approvedBy         Membership?        @relation("WorkflowApprovedBy", fields: [approvedByMembershipId], references: [id], onDelete: SetNull)
+
+  @@unique([workflowDefinitionId, idempotencyKey])
+  @@index([organisationId, status, createdAt])
+}
+
+enum KnowledgeArticleStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+model KnowledgeCategory {
+  id              String   @id @default(cuid())
+  organisationId  String
+  name            String
+  description     String?
+  isClientVisible Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  organisation Organisation      @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  articles     KnowledgeArticle[]
+
+  @@unique([organisationId, name])
+}
+
+model KnowledgeArticle {
+  id                String                 @id @default(cuid())
+  organisationId    String
+  categoryId        String?
+  ownerMembershipId String?
+  title             String
+  slug              String
+  content           String
+  tags              String[]               @default([])
+  status            KnowledgeArticleStatus @default(DRAFT)
+  isClientVisible   Boolean                @default(false)
+  reviewDueAt       DateTime?
+  publishedAt       DateTime?
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
+
+  organisation Organisation              @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  category     KnowledgeCategory?        @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  owner        Membership?               @relation("KnowledgeArticleOwner", fields: [ownerMembershipId], references: [id], onDelete: SetNull)
+  versions     KnowledgeArticleVersion[]
+  feedback     KnowledgeArticleFeedback[]
+
+  @@unique([organisationId, slug])
+  @@index([organisationId, status])
+}
+
+model KnowledgeArticleVersion {
+  id                   String   @id @default(cuid())
+  articleId            String
+  versionNumber        Int
+  title                String
+  content              String
+  createdByMembershipId String?
+  createdAt            DateTime @default(now())
+
+  article   KnowledgeArticle @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  createdBy Membership?      @relation("KnowledgeVersionAuthor", fields: [createdByMembershipId], references: [id], onDelete: SetNull)
+
+  @@unique([articleId, versionNumber])
+}
+
+model KnowledgeArticleFeedback {
+  id                 String   @id @default(cuid())
+  organisationId     String
+  articleId          String
+  portalUserId       String?
+  membershipId       String?
+  rating             Int
+  comment            String?
+  createdAt          DateTime @default(now())
+
+  organisation Organisation    @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  article      KnowledgeArticle @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  portalUser   ClientPortalUser? @relation("KnowledgeFeedbackPortalUser", fields: [portalUserId], references: [id], onDelete: SetNull)
+  membership   Membership?       @relation("KnowledgeFeedbackMembership", fields: [membershipId], references: [id], onDelete: SetNull)
+
+  @@index([organisationId, articleId])
+}
+
+enum AssetOwnershipType {
+  ORGANISATION
+  CLIENT
+}
+
+enum AssetStatus {
+  ACTIVE
+  MAINTENANCE
+  RETIRED
+  INACTIVE
+}
+
+model AssetCategory {
+  id             String   @id @default(cuid())
+  organisationId String
+  name           String
+  description    String?
+  createdAt      DateTime @default(now())
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  assets       Asset[]
+
+  @@unique([organisationId, name])
+}
+
+model Asset {
+  id                   String             @id @default(cuid())
+  organisationId       String
+  categoryId           String?
+  clientId             String?
+  assignedMembershipId String?
+  name                 String
+  reference            String
+  type                 String
+  ownershipType        AssetOwnershipType @default(ORGANISATION)
+  status               AssetStatus        @default(ACTIVE)
+  location             String?
+  metadata             Json?
+  purchaseDate         DateTime?
+  purchaseCostMinor    Int?
+  currency             String             @default("GBP")
+  warrantyUntil        DateTime?
+  renewalDate          DateTime?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  organisation Organisation        @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  category     AssetCategory?      @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  client       Client?             @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  assignedTo   Membership?         @relation("AssetAssignedToMembership", fields: [assignedMembershipId], references: [id], onDelete: SetNull)
+  tickets      HelpdeskTicket[]
+  activities   AssetActivity[]
+  assignmentHistory AssetAssignmentHistory[]
+
+  @@unique([organisationId, reference])
+  @@index([organisationId, status])
+}
+
+model AssetActivity {
+  id                    String   @id @default(cuid())
+  organisationId        String
+  assetId               String
+  performedByMembershipId String?
+  activityType          String
+  details               String?
+  createdAt             DateTime @default(now())
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  asset        Asset        @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  performedBy  Membership?  @relation("AssetActivityMembership", fields: [performedByMembershipId], references: [id], onDelete: SetNull)
+
+  @@index([organisationId, assetId, createdAt])
+}
+
+model AssetAssignmentHistory {
+  id                     String   @id @default(cuid())
+  assetId                String
+  fromMembershipId       String?
+  toMembershipId         String?
+  changedByMembershipId  String?
+  reason                 String?
+  changedAt              DateTime @default(now())
+
+  asset      Asset       @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  fromMember Membership? @relation("AssetFromMembership", fields: [fromMembershipId], references: [id], onDelete: SetNull)
+  toMember   Membership? @relation("AssetToMembership", fields: [toMembershipId], references: [id], onDelete: SetNull)
+  changedBy  Membership? @relation("AssetChangedByMembership", fields: [changedByMembershipId], references: [id], onDelete: SetNull)
+
+  @@index([assetId, changedAt])
 }
