@@ -10,7 +10,6 @@ import { Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Select,
@@ -41,6 +40,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { formatEnumLabel } from "@/lib/utils";
 import { formatMoneyMinor } from "@/lib/money";
 import { PROPOSAL_STATUSES, PROPOSAL_STATUS_BADGE_VARIANT } from "@/modules/proposals/constants";
+import { StatusBadge } from "@/components/ui/status-badge";
 
 interface CompanyOption {
   id: string;
@@ -323,15 +323,7 @@ export default function ProposalsPage() {
                   <TableCell>
                     <Select value={proposal.status} onValueChange={(v) => onStatusChange(proposal, v)}>
                       <SelectTrigger className="h-7 w-36 border-none bg-transparent px-0 shadow-none">
-                        <Badge
-                          variant={
-                            PROPOSAL_STATUS_BADGE_VARIANT[
-                              proposal.status as keyof typeof PROPOSAL_STATUS_BADGE_VARIANT
-                            ] ?? "outline"
-                          }
-                        >
-                          {formatEnumLabel(proposal.status)}
-                        </Badge>
+                        <StatusBadge status={proposal.status} variantMap={PROPOSAL_STATUS_BADGE_VARIANT} />
                       </SelectTrigger>
                       <SelectContent>
                         {PROPOSAL_STATUSES.map((s) => (

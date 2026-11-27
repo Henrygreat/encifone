@@ -9,7 +9,6 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Select,
@@ -37,6 +36,7 @@ import {
 } from "@/components/ui/dialog";
 import { BentoEmptyState } from "@/components/bento/bento-grid";
 import { PageHeader } from "@/components/ui/page-header";
+import { StatusBadge } from "@/components/ui/status-badge";
 import { formatEnumLabel } from "@/lib/utils";
 import { formatMoneyMinor } from "@/lib/money";
 import { useDebouncedValue } from "@/lib/use-debounced-value";
@@ -276,9 +276,7 @@ export default function ServiceCataloguePage() {
                     {formatMoneyMinor(item.unitPriceMinor, item.currency)}
                   </TableCell>
                   <TableCell>
-                    <Badge variant={STATUS_BADGE_VARIANT[item.status] ?? "outline"}>
-                      {formatEnumLabel(item.status)}
-                    </Badge>
+                    <StatusBadge status={item.status} variantMap={STATUS_BADGE_VARIANT} />
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-2">

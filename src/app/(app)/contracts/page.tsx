@@ -9,7 +9,6 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -38,8 +37,8 @@ import {
 } from "@/components/ui/dialog";
 import { BentoEmptyState } from "@/components/bento/bento-grid";
 import { PageHeader } from "@/components/ui/page-header";
-import { formatEnumLabel } from "@/lib/utils";
 import { CONTRACT_STATUS_BADGE_VARIANT } from "@/modules/contracts/constants";
+import { StatusBadge } from "@/components/ui/status-badge";
 
 interface CompanyOption {
   id: string;
@@ -311,15 +310,7 @@ export default function ContractsPage() {
                         : "—"}
                     </TableCell>
                     <TableCell>
-                      <Badge
-                        variant={
-                          CONTRACT_STATUS_BADGE_VARIANT[
-                            contract.status as keyof typeof CONTRACT_STATUS_BADGE_VARIANT
-                          ] ?? "outline"
-                        }
-                      >
-                        {formatEnumLabel(contract.status)}
-                      </Badge>
+                      <StatusBadge status={contract.status} variantMap={CONTRACT_STATUS_BADGE_VARIANT} />
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">

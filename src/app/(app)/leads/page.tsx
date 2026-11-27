@@ -10,7 +10,6 @@ import { ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -46,6 +45,7 @@ import {
 import { BentoEmptyState } from "@/components/bento/bento-grid";
 import { PageHeader } from "@/components/ui/page-header";
 import { SavedViewSelector, SaveViewDialog } from "@/components/ui/saved-view-selector";
+import { StatusBadge } from "@/components/ui/status-badge";
 import { formatEnumLabel } from "@/lib/utils";
 import { useDebouncedValue } from "@/lib/use-debounced-value";
 import { useSavedViews, type SavedView } from "@/lib/use-saved-views";
@@ -462,9 +462,7 @@ export default function LeadsPage() {
                         {lead.owner?.user.name ?? lead.owner?.user.email ?? "Unassigned"}
                       </TableCell>
                       <TableCell>
-                        <Badge variant={STATUS_BADGE_VARIANT[lead.status] ?? "outline"}>
-                          {formatEnumLabel(lead.status)}
-                        </Badge>
+                        <StatusBadge status={lead.status} variantMap={STATUS_BADGE_VARIANT} />
                       </TableCell>
                       <TableCell className="text-right">
                         {canConvert && (
