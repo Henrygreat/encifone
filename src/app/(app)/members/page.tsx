@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
   TableBody,
@@ -40,6 +42,11 @@ interface MemberRow {
   user: { id: string; name: string | null; email: string; image: string | null };
 }
 
+interface OrganisationSettings {
+  conversionRequiresContract: boolean;
+  conversionRequiresPayment: boolean;
+}
+
 export default function MembersPage() {
   const queryClient = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -56,6 +63,30 @@ export default function MembersPage() {
       return res.json();
     },
   });
+
+  const { data: settings } = useQuery({
+    queryKey: ["organisation-settings"],
+    queryFn: async (): Promise<OrganisationSettings> => {
+      const res = await fetch("/api/v1/organisations/settings");
+      if (!res.ok) throw new Error("Could not load organisation settings.");
+      return res.json();
+    },
+  });
+
+  async function onToggleGate(field: "conversionRequiresContract" | "conversionRequiresPayment", value: boolean) {
+    const res = await fetch("/api/v1/organisations/settings", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ [field]: value }),
+    });
+    const result = await res.json();
+    if (!res.ok) {
+      toast.error(result.error ?? "Could not update this setting.");
+      return;
+    }
+    await queryClient.invalidateQueries({ queryKey: ["organisation-settings"] });
+    toast.success("Updated.");
+  }
 
   async function sendInvite() {
     setSubmitting(true);
@@ -141,6 +172,45 @@ export default function MembersPage() {
           </DialogContent>
         </Dialog>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Lead-to-client conversion rules</CardTitle>
+          <CardDescription>
+            By default, a deal becomes a client as soon as it enters a Won stage. Turn either of these on
+            to require it first — the deal still shows as Won on the board, but no Client record is
+            created until the requirement is met.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-4">
+          <div className="flex items-center justify-between">
+            <Label htmlFor="require-contract" className="flex flex-col gap-0.5">
+              <span>Require a signed contract</span>
+              <span className="text-xs font-normal text-muted-foreground">
+                Blocks conversion until a Contract linked to the deal is SIGNED.
+              </span>
+            </Label>
+            <Switch
+              id="require-contract"
+              checked={settings?.conversionRequiresContract ?? false}
+              onCheckedChange={(v) => onToggleGate("conversionRequiresContract", v)}
+            />
+          </div>
+          <div className="flex items-center justify-between">
+            <Label htmlFor="require-payment" className="flex flex-col gap-0.5">
+              <span>Require a succeeded payment</span>
+              <span className="text-xs font-normal text-muted-foreground">
+                Blocks conversion until a Stripe payment linked to the deal succeeds.
+              </span>
+            </Label>
+            <Switch
+              id="require-payment"
+              checked={settings?.conversionRequiresPayment ?? false}
+              onCheckedChange={(v) => onToggleGate("conversionRequiresPayment", v)}
+            />
+          </div>
+        </CardContent>
+      </Card>
 
       <Table>
         <TableHeader>
