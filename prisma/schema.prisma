@@ -88,27 +88,37 @@ model Organisation {
   // a silent behaviour change for an org that hasn't configured this.
   conversionRequiresContract Boolean  @default(false)
   conversionRequiresPayment  Boolean  @default(false)
+  // Phase 3 — when true and the org has a default OnboardingTemplate,
+  // creating a Client (ensureClientFromWonOpportunity, or Stripe/contract-
+  // gated conversion) automatically opens a ClientOnboarding against it.
+  // Default false: an org that hasn't configured a template sees no
+  // behaviour change, same opt-in pattern as the conversion-gating flags.
+  autoStartOnboarding        Boolean  @default(false)
   createdAt                  DateTime @default(now())
   updatedAt                  DateTime @updatedAt
 
-  memberships       Membership[]
-  auditLogs         AuditLog[]
-  companies         Company[]
-  contacts          Contact[]
-  leads             Lead[]
-  customFields      CustomFieldDefinition[]
-  customValues      CustomFieldValue[]
-  pipelines         Pipeline[]
-  opportunities     Opportunity[]
-  activities        Activity[]
-  clients           Client[]
-  serviceItems      ServiceItem[]
-  proposals         Proposal[]
-  savedViews        SavedView[]
-  contractTemplates ContractTemplate[]
-  contracts         Contract[]
-  payments          Payment[]
-  aiConfig          AIOrganisationConfig?
+  memberships         Membership[]
+  auditLogs           AuditLog[]
+  companies           Company[]
+  contacts            Contact[]
+  leads               Lead[]
+  customFields        CustomFieldDefinition[]
+  customValues        CustomFieldValue[]
+  pipelines           Pipeline[]
+  opportunities       Opportunity[]
+  activities          Activity[]
+  clients             Client[]
+  serviceItems        ServiceItem[]
+  proposals           Proposal[]
+  savedViews          SavedView[]
+  contractTemplates   ContractTemplate[]
+  contracts           Contract[]
+  payments            Payment[]
+  aiConfig            AIOrganisationConfig?
+  clientPortalUsers   ClientPortalUser[]
+  onboardingTemplates OnboardingTemplate[]
+  clientDocuments     ClientDocument[]
+  notifications       Notification[]
   aiUsageLogs       AIUsageLog[]
 }
 
@@ -162,6 +172,12 @@ model Membership {
   ownedProposals     Proposal[]    @relation("ProposalOwner")
   ownedSavedViews    SavedView[]   @relation("SavedViewOwner")
   ownedContracts     Contract[]    @relation("ContractOwner")
+
+  completedOnboardingSteps ClientOnboardingStep[] @relation("StepCompletedByMembership")
+  approvedOnboardingSteps  ClientOnboardingStep[] @relation("StepApprovedByMembership")
+  uploadedDocuments        ClientDocument[]       @relation("DocumentUploadedByMembership")
+  reviewedDocuments        ClientDocument[]       @relation("DocumentReviewedByMembership")
+  receivedNotifications    Notification[]         @relation("NotificationRecipientMembership")
 
   @@unique([userId, organisationId])
   @@index([organisationId, status])
@@ -644,6 +660,9 @@ model Client {
   originatingOpportunity Opportunity?            @relation(fields: [originatingOpportunityId], references: [id], onDelete: SetNull)
   owner                  Membership?             @relation("ClientOwner", fields: [ownerId], references: [id], onDelete: SetNull)
   lifecycleHistory       ClientLifecycleHistory[]
+  portalUsers            ClientPortalUser[]
+  onboardings            ClientOnboarding[]
+  documents              ClientDocument[]
 
   @@index([organisationId, lifecycleStage])
   @@index([organisationId, deletedAt])
@@ -1046,4 +1065,299 @@ model AIUsageLog {
 
   @@index([organisationId, createdAt])
   @@index([organisationId, feature])
+}
+
+// --- Client Portal + Onboarding (Phase 3, docs/MASTER_ROADMAP.md) ---
+// A client-portal principal (ClientPortalUser) is deliberately NOT a
+// `User`/`Membership` row — it is a different kind of actor (an external
+// client, not internal staff) and is never given a NextAuth session.
+// Portal auth is a separate, minimal session mechanism (see
+// src/modules/portal/auth.ts): a random session token's SHA-256 hash is
+// the only thing ever stored, mirroring why API keys are encrypted rather
+// than kept plaintext (src/lib/crypto.ts) — a database-only read can never
+// yield a usable session. Invite tokens follow the existing, already-
+// shipped Membership.inviteToken pattern (a unique opaque column, not a
+// session) rather than inventing a second convention.
+
+enum ClientPortalUserStatus {
+  INVITED
+  ACTIVE
+  DISABLED
+}
+
+model ClientPortalUser {
+  id             String                 @id @default(cuid())
+  organisationId String
+  clientId       String
+  email          String
+  name           String?
+  passwordHash   String?
+  status         ClientPortalUserStatus @default(INVITED)
+  invitedAt      DateTime?
+  lastLoginAt    DateTime?
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  client       Client       @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  invites               ClientPortalInvite[]
+  sessions              ClientPortalSession[]
+  uploadedDocuments     ClientDocument[]        @relation("DocumentUploadedByPortalUser")
+  completedSteps        ClientOnboardingStep[]  @relation("StepCompletedByPortalUser")
+  receivedNotifications Notification[]          @relation("NotificationRecipientPortalUser")
+
+  @@unique([clientId, email])
+  @@index([organisationId])
+}
+
+model ClientPortalInvite {
+  id                 String    @id @default(cuid())
+  clientPortalUserId String
+  token              String    @unique
+  expiresAt          DateTime
+  acceptedAt         DateTime?
+  createdAt          DateTime  @default(now())
+
+  clientPortalUser ClientPortalUser @relation(fields: [clientPortalUserId], references: [id], onDelete: Cascade)
+
+  @@index([clientPortalUserId])
+}
+
+// Session identifier is never stored raw — only its hash — so a copy of
+// this table alone (backup, read replica, admin query) can never be used
+// to impersonate a logged-in client.
+model ClientPortalSession {
+  id                 String   @id @default(cuid())
+  clientPortalUserId String
+  tokenHash          String   @unique
+  expiresAt          DateTime
+  createdAt          DateTime @default(now())
+  lastSeenAt         DateTime @default(now())
+
+  clientPortalUser ClientPortalUser @relation(fields: [clientPortalUserId], references: [id], onDelete: Cascade)
+
+  @@index([clientPortalUserId])
+}
+
+enum OnboardingStepType {
+  WELCOME
+  CLIENT_INFO
+  PROPOSAL_ACCEPTANCE
+  CONTRACT_SIGNATURE
+  PAYMENT
+  DOCUMENT_UPLOAD
+  QUESTIONNAIRE
+  INTERNAL_REVIEW
+  SERVICE_ACTIVATION
+  CUSTOM
+}
+
+enum OnboardingAssignee {
+  CLIENT
+  INTERNAL
+}
+
+enum OnboardingStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum OnboardingStepStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  SKIPPED
+  BLOCKED
+}
+
+model OnboardingTemplate {
+  id             String    @id @default(cuid())
+  organisationId String
+  name           String
+  description    String?
+  // At most one default per org — enforced in the service layer, same
+  // exclusivity pattern already used for SavedView.isDefault.
+  isDefault      Boolean   @default(false)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  organisation Organisation             @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  steps        OnboardingTemplateStep[]
+  onboardings  ClientOnboarding[]
+
+  @@index([organisationId, deletedAt])
+}
+
+model OnboardingTemplateStep {
+  id               String             @id @default(cuid())
+  templateId       String
+  order            Int
+  label            String
+  description      String?
+  stepType         OnboardingStepType
+  assignedTo       OnboardingAssignee @default(CLIENT)
+  isMandatory      Boolean            @default(true)
+  requiresApproval Boolean            @default(false)
+  // Due date relative to the onboarding's startedAt — e.g. 3 means "3
+  // days after onboarding starts", resolved once onto ClientOnboardingStep.dueAt.
+  dueOffsetDays    Int?
+  // Step-type-specific config — e.g. { questionnaire: [...] } for
+  // QUESTIONNAIRE, { requiredCategories: [...] } for DOCUMENT_UPLOAD.
+  // Never interpreted as anything beyond what the relevant step-type
+  // renderer actually implements (CLAUDE.md rule 6).
+  config           Json?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  template      OnboardingTemplate      @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  stepInstances ClientOnboardingStep[]
+
+  @@index([templateId, order])
+}
+
+model ClientOnboarding {
+  id          String           @id @default(cuid())
+  clientId    String
+  templateId  String
+  status      OnboardingStatus @default(NOT_STARTED)
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  client   Client              @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  template OnboardingTemplate  @relation(fields: [templateId], references: [id], onDelete: Restrict)
+  steps    ClientOnboardingStep[]
+
+  @@index([clientId, status])
+}
+
+// Denormalised snapshot of the template step at the moment this
+// onboarding was created — a later edit to the template can never
+// silently change a step already presented to a client, the same
+// versioning philosophy this project already applies to
+// Proposal/ProposalVersion and Contract/ContractVersion.
+model ClientOnboardingStep {
+  id                      String                @id @default(cuid())
+  onboardingId            String
+  templateStepId          String
+  order                   Int
+  label                   String
+  description             String?
+  stepType                OnboardingStepType
+  assignedTo              OnboardingAssignee
+  isMandatory             Boolean
+  requiresApproval        Boolean
+  dueAt                   DateTime?
+  status                  OnboardingStepStatus  @default(PENDING)
+  // Step-specific captured data — e.g. questionnaire answers.
+  data                    Json?
+  completedAt             DateTime?
+  completedByPortalUserId String?
+  completedByMembershipId String?
+  approvedByMembershipId  String?
+  approvedAt              DateTime?
+  createdAt               DateTime              @default(now())
+  updatedAt               DateTime              @updatedAt
+
+  onboarding            ClientOnboarding        @relation(fields: [onboardingId], references: [id], onDelete: Cascade)
+  templateStep          OnboardingTemplateStep  @relation(fields: [templateStepId], references: [id], onDelete: Restrict)
+  completedByPortalUser ClientPortalUser?       @relation("StepCompletedByPortalUser", fields: [completedByPortalUserId], references: [id], onDelete: SetNull)
+  completedByMembership Membership?             @relation("StepCompletedByMembership", fields: [completedByMembershipId], references: [id], onDelete: SetNull)
+  approvedByMembership  Membership?             @relation("StepApprovedByMembership", fields: [approvedByMembershipId], references: [id], onDelete: SetNull)
+  documents             ClientDocument[]
+
+  @@index([onboardingId, order])
+}
+
+enum DocumentUploadedByType {
+  CLIENT
+  INTERNAL
+}
+
+enum DocumentStatus {
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
+}
+
+// File content itself lives in S3-compatible object storage
+// (docs/ARCHITECTURE.md §"storage"), never in Postgres — this row is
+// metadata only. storageKey is an opaque, namespaced object key
+// (org/{organisationId}/clients/{clientId}/documents/{cuid}), never a
+// user-controlled path and never served from a public bucket URL —
+// every download goes through a short-lived, permission-checked signed
+// URL minted on demand (src/lib/storage.ts).
+model ClientDocument {
+  id                     String                 @id @default(cuid())
+  organisationId         String
+  clientId               String
+  onboardingStepId       String?
+  uploadedByType         DocumentUploadedByType
+  uploadedByPortalUserId String?
+  uploadedByMembershipId String?
+  category               String?
+  originalFilename       String
+  storageKey             String                 @unique
+  mimeType               String
+  sizeBytes              Int
+  status                 DocumentStatus         @default(PENDING_REVIEW)
+  reviewedByMembershipId String?
+  reviewedAt             DateTime?
+  createdAt              DateTime               @default(now())
+  deletedAt              DateTime?
+
+  organisation         Organisation          @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  client               Client                @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  onboardingStep       ClientOnboardingStep? @relation(fields: [onboardingStepId], references: [id], onDelete: SetNull)
+  uploadedByPortalUser ClientPortalUser?     @relation("DocumentUploadedByPortalUser", fields: [uploadedByPortalUserId], references: [id], onDelete: SetNull)
+  uploadedByMembership Membership?           @relation("DocumentUploadedByMembership", fields: [uploadedByMembershipId], references: [id], onDelete: SetNull)
+  reviewedByMembership Membership?           @relation("DocumentReviewedByMembership", fields: [reviewedByMembershipId], references: [id], onDelete: SetNull)
+
+  @@index([organisationId, clientId, deletedAt])
+  @@index([onboardingStepId])
+}
+
+enum NotificationRecipientType {
+  MEMBERSHIP
+  CLIENT_PORTAL_USER
+}
+
+enum NotificationType {
+  ONBOARDING_STEP_DUE
+  ONBOARDING_STEP_COMPLETED
+  ONBOARDING_COMPLETED
+  DOCUMENT_UPLOADED
+  DOCUMENT_REVIEWED
+  PORTAL_INVITE_SENT
+  GENERAL
+}
+
+// In-app only — no email/SMS delivery exists in this project (see
+// "Known limitations" in docs/IMPLEMENTATION_STATUS.md), so a
+// Notification row is never presented as "sent" to anyone, only
+// rendered in-app for its one real recipient.
+model Notification {
+  id                    String                     @id @default(cuid())
+  organisationId        String
+  recipientType         NotificationRecipientType
+  recipientMembershipId String?
+  recipientPortalUserId String?
+  type                  NotificationType
+  title                 String
+  body                  String?
+  href                  String?
+  readAt                DateTime?
+  createdAt             DateTime                   @default(now())
+
+  organisation        Organisation      @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  recipientMembership Membership?       @relation("NotificationRecipientMembership", fields: [recipientMembershipId], references: [id], onDelete: Cascade)
+  recipientPortalUser ClientPortalUser? @relation("NotificationRecipientPortalUser", fields: [recipientPortalUserId], references: [id], onDelete: Cascade)
+
+  @@index([organisationId, recipientMembershipId, readAt])
+  @@index([organisationId, recipientPortalUserId, readAt])
 }
