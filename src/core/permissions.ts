@@ -19,6 +19,14 @@ export enum Capability {
   CRM_VIEW = "crm:view",
   CRM_MANAGE = "crm:manage",
   CRM_DELETE = "crm:delete",
+  // Phase 3 — Client Portal + Onboarding. VIEW covers reading onboarding
+  // progress/documents/portal-user status for a client; MANAGE covers
+  // inviting/disabling portal users, creating/editing onboarding
+  // templates, starting an onboarding, and approving/rejecting a
+  // submitted document — all more consequential than read access, same
+  // split rationale as CRM_MANAGE vs CRM_VIEW.
+  PORTAL_VIEW = "portal:view",
+  PORTAL_MANAGE = "portal:manage",
 }
 
 const ROLE_CAPABILITIES: Record<MembershipRole, Capability[]> = {
@@ -31,23 +39,48 @@ const ROLE_CAPABILITIES: Record<MembershipRole, Capability[]> = {
     Capability.CRM_VIEW,
     Capability.CRM_MANAGE,
     Capability.CRM_DELETE,
+    Capability.PORTAL_VIEW,
+    Capability.PORTAL_MANAGE,
   ],
-  OPERATIONS_MANAGER: [Capability.ORG_VIEW_MEMBERS, Capability.CRM_VIEW, Capability.CRM_MANAGE],
+  OPERATIONS_MANAGER: [
+    Capability.ORG_VIEW_MEMBERS,
+    Capability.CRM_VIEW,
+    Capability.CRM_MANAGE,
+    Capability.PORTAL_VIEW,
+    Capability.PORTAL_MANAGE,
+  ],
   SALES_MANAGER: [
     Capability.ORG_VIEW_MEMBERS,
     Capability.CRM_VIEW,
     Capability.CRM_MANAGE,
     Capability.CRM_DELETE,
+    Capability.PORTAL_VIEW,
   ],
-  SALES_REPRESENTATIVE: [Capability.ORG_VIEW_MEMBERS, Capability.CRM_VIEW, Capability.CRM_MANAGE],
-  ACCOUNT_MANAGER: [Capability.ORG_VIEW_MEMBERS, Capability.CRM_VIEW, Capability.CRM_MANAGE],
-  FINANCE_MANAGER: [Capability.ORG_VIEW_MEMBERS, Capability.CRM_VIEW],
-  PROJECT_MANAGER: [Capability.ORG_VIEW_MEMBERS, Capability.CRM_VIEW],
-  TEAM_MEMBER: [Capability.ORG_VIEW_MEMBERS, Capability.CRM_VIEW],
+  SALES_REPRESENTATIVE: [
+    Capability.ORG_VIEW_MEMBERS,
+    Capability.CRM_VIEW,
+    Capability.CRM_MANAGE,
+    Capability.PORTAL_VIEW,
+  ],
+  ACCOUNT_MANAGER: [
+    Capability.ORG_VIEW_MEMBERS,
+    Capability.CRM_VIEW,
+    Capability.CRM_MANAGE,
+    Capability.PORTAL_VIEW,
+    Capability.PORTAL_MANAGE,
+  ],
+  FINANCE_MANAGER: [Capability.ORG_VIEW_MEMBERS, Capability.CRM_VIEW, Capability.PORTAL_VIEW],
+  PROJECT_MANAGER: [
+    Capability.ORG_VIEW_MEMBERS,
+    Capability.CRM_VIEW,
+    Capability.PORTAL_VIEW,
+    Capability.PORTAL_MANAGE,
+  ],
+  TEAM_MEMBER: [Capability.ORG_VIEW_MEMBERS, Capability.CRM_VIEW, Capability.PORTAL_VIEW],
   CONTRACTOR: [],
   CLIENT_ADMINISTRATOR: [],
   CLIENT_USER: [],
-  READ_ONLY_AUDITOR: [Capability.ORG_VIEW_MEMBERS, Capability.CRM_VIEW],
+  READ_ONLY_AUDITOR: [Capability.ORG_VIEW_MEMBERS, Capability.CRM_VIEW, Capability.PORTAL_VIEW],
 };
 
 export function roleHasCapability(role: MembershipRole, capability: Capability): boolean {

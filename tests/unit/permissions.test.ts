@@ -38,4 +38,17 @@ describe("roleHasCapability", () => {
     expect(roleHasCapability(MembershipRole.TEAM_MEMBER, Capability.CRM_VIEW)).toBe(true);
     expect(roleHasCapability(MembershipRole.TEAM_MEMBER, Capability.CRM_MANAGE)).toBe(false);
   });
+
+  it("grants account managers and project managers full portal management, but sales reps view-only", () => {
+    expect(roleHasCapability(MembershipRole.ACCOUNT_MANAGER, Capability.PORTAL_VIEW)).toBe(true);
+    expect(roleHasCapability(MembershipRole.ACCOUNT_MANAGER, Capability.PORTAL_MANAGE)).toBe(true);
+    expect(roleHasCapability(MembershipRole.PROJECT_MANAGER, Capability.PORTAL_MANAGE)).toBe(true);
+    expect(roleHasCapability(MembershipRole.SALES_REPRESENTATIVE, Capability.PORTAL_VIEW)).toBe(true);
+    expect(roleHasCapability(MembershipRole.SALES_REPRESENTATIVE, Capability.PORTAL_MANAGE)).toBe(false);
+  });
+
+  it("denies every portal capability to a client user and a contractor", () => {
+    expect(roleHasCapability(MembershipRole.CLIENT_USER, Capability.PORTAL_VIEW)).toBe(false);
+    expect(roleHasCapability(MembershipRole.CONTRACTOR, Capability.PORTAL_VIEW)).toBe(false);
+  });
 });

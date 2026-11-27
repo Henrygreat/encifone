@@ -1085,11 +1085,15 @@ enum ClientPortalUserStatus {
   DISABLED
 }
 
+// email is globally unique, not scoped per-client: the login form takes
+// only email+password (no clientId to disambiguate), so one email maps
+// to exactly one portal account. A person who is a contact for two
+// different Client records needs two distinct portal-login emails.
 model ClientPortalUser {
   id             String                 @id @default(cuid())
   organisationId String
   clientId       String
-  email          String
+  email          String                 @unique
   name           String?
   passwordHash   String?
   status         ClientPortalUserStatus @default(INVITED)
@@ -1107,8 +1111,8 @@ model ClientPortalUser {
   completedSteps        ClientOnboardingStep[]  @relation("StepCompletedByPortalUser")
   receivedNotifications Notification[]          @relation("NotificationRecipientPortalUser")
 
-  @@unique([clientId, email])
   @@index([organisationId])
+  @@index([clientId])
 }
 
 model ClientPortalInvite {

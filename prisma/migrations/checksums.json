@@ -7,5 +7,6 @@
   "20261126235912_client_lifecycle_catalogue_proposals_views": "20c0a4907739ca9488d223b3cb278c3562ad3c1cb28c055cdec341e5002f4477",
   "20261127064752_contracts_esignature_payments_webhooks": "1330e3a8d9b34abd23253252709a8c0a4d92f3fe5af542db3032ec51be1e761e",
   "20261127070847_ai_gateway_config_usage": "8c8812c744726ca202146a0cbc2508c1d28d914e2807ac065d0e13d967eea642",
-  "20261127100720_client_portal_and_onboarding": "ace46fb7ff92280a4b0b8c13b95ceeed95b186ac372e9d33989ee04791a591c6"
+  "20261127100720_client_portal_and_onboarding": "ace46fb7ff92280a4b0b8c13b95ceeed95b186ac372e9d33989ee04791a591c6",
+  "20261127101110_client_portal_user_email_global_unique": "fa5d30e9dff200e092ac59e514b614bfc068c6897538be0e8ef1d514028decc6"
 }
