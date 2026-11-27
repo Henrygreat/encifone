@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { BentoCard } from "@/components/bento/bento-grid";
 import { AiOrb } from "@/components/three/ai-orb";
+import type { IntelligenceCoreState } from "@/components/three/ai-orb";
 
 function greeting(hour: number) {
   if (hour < 5) return "Working late";
@@ -25,36 +26,36 @@ export function DashboardHero({
   organisationName,
   summaryLine,
   quickActions,
-  aiActive,
+  aiState,
   aiStatusLabel,
 }: {
   firstName: string;
   organisationName: string;
   summaryLine: string;
   quickActions: ReactNode;
-  aiActive: boolean;
+  aiState: IntelligenceCoreState;
   aiStatusLabel: string;
 }) {
   return (
     <BentoCard
-      colSpan={12}
+      colSpan={8}
       variant="glass"
-      className="h-[220px] flex-row items-center justify-between gap-6 overflow-hidden sm:h-[260px] lg:h-[300px]"
+      className="min-h-[210px] flex-row items-center justify-between gap-4 overflow-hidden"
     >
-      <div className="flex min-w-0 flex-1 flex-col gap-2">
+      <div className="flex min-w-0 flex-1 flex-col gap-1.5">
         <p className="text-sm font-medium" style={{ color: "var(--module-sales)" }}>
           {greeting(new Date().getHours())}, {firstName}
         </p>
-        <h1 className="truncate text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
+        <h1 className="truncate text-xl font-semibold tracking-tight text-foreground sm:text-2xl lg:text-3xl">
           {organisationName}
         </h1>
         <p className="text-sm text-muted-foreground">{summaryLine}</p>
-        <div className="mt-2 flex flex-wrap gap-2">{quickActions}</div>
+        <div className="mt-1 flex flex-wrap gap-2">{quickActions}</div>
       </div>
 
       <div className="hidden shrink-0 flex-col items-center gap-1 sm:flex">
-        <div className="relative size-32 sm:size-40 lg:size-48">
-          <AiOrb className="size-full" active={aiActive} />
+        <div className="relative size-28 sm:size-32 lg:size-36">
+          <AiOrb className="size-full" state={aiState} />
         </div>
         <p className="text-xs font-medium text-foreground">Intelligence Core</p>
         <p className="text-[11px] text-muted-foreground">{aiStatusLabel}</p>

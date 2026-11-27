@@ -2,8 +2,9 @@
 
 import { useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
-import { Sparkles } from "@react-three/drei";
+import { Sparkles, MeshDistortMaterial } from "@react-three/drei";
 import type { Group, Mesh, Points } from "three";
+import type { IntelligenceCoreState } from "@/components/three/ai-orb";
 
 /** Evenly distributes `count` points on a unit sphere (the Fibonacci
  * sphere method) — cheap, deterministic, no RNG-driven clustering. */
@@ -41,13 +42,7 @@ function buildConnections(positions: Float32Array, maxDistance: number, maxLines
   return new Float32Array(lines);
 }
 
-export interface AiOrbSceneProps {
-  /** Data-driven visual state (docs/AURORA_DESIGN_SYSTEM.md §"Intelligence
-   * Core") — vibrant emerald when this org has AI configured and enabled,
-   * a dimmer slate when it doesn't. Never implies active AI work when none
-   * is configured (CLAUDE.md rule: never imply AI is working when it isn't). */
-  active?: boolean;
-}
+export interface AiOrbSceneProps { state?: IntelligenceCoreState }
 
 /**
  * The EncifOne "Intelligence Core" — a luminous centre, a particle sphere
@@ -59,16 +54,30 @@ export interface AiOrbSceneProps {
  * in (src/components/three/ai-orb.tsx) — used both as the dashboard's
  * compact widget and the dashboard hero's larger centrepiece.
  */
-export default function AiOrbScene({ active = true }: AiOrbSceneProps) {
+const STATE_COLORS: Record<IntelligenceCoreState, { core: string; secondary: string; tertiary: string; pulse: number }> = {
+  "not-configured": { core: "#475569", secondary: "#64748b", tertiary: "#334155", pulse: 0.02 },
+  ready: { core: "#00E5A0", secondary: "#22D3EE", tertiary: "#A78BFA", pulse: 0.05 },
+  processing: { core: "#22D3EE", secondary: "#3B82F6", tertiary: "#00E5A0", pulse: 0.08 },
+  degraded: { core: "#FBBF24", secondary: "#A78BFA", tertiary: "#22D3EE", pulse: 0.04 },
+  error: { core: "#FB7185", secondary: "#A78BFA", tertiary: "#3B82F6", pulse: 0.03 },
+};
+
+export default function AiOrbScene({ state: visualState = "ready" }: AiOrbSceneProps) {
   const coreRef = useRef<Mesh>(null);
   const glowRef = useRef<Mesh>(null);
+  const shellARef = useRef<Mesh>(null);
+  const shellBRef = useRef<Mesh>(null);
   const innerRingRef = useRef<Group>(null);
   const outerRingRef = useRef<Group>(null);
   const particlesRef = useRef<Points>(null);
+  const trailRingRef = useRef<Group>(null);
 
-  const coreColor = active ? "#10B981" : "#64748b";
-  const secondaryColor = active ? "#22D3EE" : "#475569";
-  const tertiaryColor = active ? "#8B5CF6" : "#334155";
+  const palette = STATE_COLORS[visualState];
+  const isActive = visualState === "ready" || visualState === "processing";
+  const isDegraded = visualState === "degraded" || visualState === "error";
+  const coreColor = palette.core;
+  const secondaryColor = palette.secondary;
+  const tertiaryColor = palette.tertiary;
 
   const particlePositions = useMemo(() => buildParticleSphere(90, 1.55), []);
   const connectionPositions = useMemo(
@@ -76,26 +85,39 @@ export default function AiOrbScene({ active = true }: AiOrbSceneProps) {
     [particlePositions]
   );
 
-  useFrame((state, delta) => {
+  useFrame((frameState, delta) => {
     if (coreRef.current) {
-      const pulse = 1 + Math.sin(state.clock.elapsedTime * 1.8) * (active ? 0.06 : 0.02);
+      const baseSpeed = visualState === "processing" ? 2.8 : 1.8;
+      const pulse = 1 + Math.sin(frameState.clock.elapsedTime * baseSpeed) * palette.pulse;
       coreRef.current.scale.setScalar(pulse);
     }
     if (glowRef.current) {
-      const breathe = 1 + Math.sin(state.clock.elapsedTime * 0.7) * 0.08;
+      const breathe = 1 + Math.sin(frameState.clock.elapsedTime * 0.7) * 0.08;
       glowRef.current.scale.setScalar(breathe);
     }
+    if (shellARef.current) {
+      shellARef.current.rotation.y += delta * (visualState === "processing" ? 0.18 : 0.08);
+      shellARef.current.rotation.x += delta * 0.04;
+    }
+    if (shellBRef.current) {
+      shellBRef.current.rotation.y -= delta * (visualState === "processing" ? 0.12 : 0.05);
+      shellBRef.current.rotation.z += delta * 0.03;
+    }
     if (innerRingRef.current) {
-      innerRingRef.current.rotation.z += delta * (active ? 0.4 : 0.12);
-      innerRingRef.current.rotation.x += delta * (active ? 0.15 : 0.05);
-      innerRingRef.current.rotation.y += (state.pointer.x * 0.3 - innerRingRef.current.rotation.y) * 0.04;
+      innerRingRef.current.rotation.z += delta * (isActive ? 0.4 : 0.12);
+      innerRingRef.current.rotation.x += delta * (isActive ? 0.15 : 0.05);
+      innerRingRef.current.rotation.y += (frameState.pointer.x * 0.3 - innerRingRef.current.rotation.y) * 0.04;
     }
     if (outerRingRef.current) {
-      outerRingRef.current.rotation.y -= delta * (active ? 0.22 : 0.07);
-      outerRingRef.current.rotation.x += (state.pointer.y * 0.2 - outerRingRef.current.rotation.x) * 0.03;
+      outerRingRef.current.rotation.y -= delta * (isActive ? 0.22 : 0.07);
+      outerRingRef.current.rotation.x += (frameState.pointer.y * 0.2 - outerRingRef.current.rotation.x) * 0.03;
+    }
+    if (trailRingRef.current) {
+      trailRingRef.current.rotation.y += delta * (visualState === "processing" ? 0.38 : 0.16);
+      trailRingRef.current.rotation.z -= delta * (visualState === "processing" ? 0.22 : 0.09);
     }
     if (particlesRef.current) {
-      particlesRef.current.rotation.y += delta * (active ? 0.06 : 0.02);
+      particlesRef.current.rotation.y += delta * (isActive ? 0.08 : 0.02);
     }
   });
 
@@ -113,12 +135,37 @@ export default function AiOrbScene({ active = true }: AiOrbSceneProps) {
 
       <mesh ref={coreRef}>
         <icosahedronGeometry args={[0.55, 2]} />
-        <meshStandardMaterial
+        <MeshDistortMaterial
           color={coreColor}
           emissive={coreColor}
-          emissiveIntensity={active ? 0.9 : 0.4}
+          emissiveIntensity={isActive ? 0.9 : 0.45}
           roughness={0.25}
           metalness={0.2}
+          distort={visualState === "processing" ? 0.18 : 0.1}
+          speed={visualState === "processing" ? 2.2 : 1.2}
+        />
+      </mesh>
+
+      <mesh ref={shellARef}>
+        <sphereGeometry args={[0.76, 28, 28]} />
+        <meshPhysicalMaterial
+          color={secondaryColor}
+          transparent
+          opacity={0.15}
+          transmission={0.9}
+          roughness={0.1}
+          thickness={0.25}
+        />
+      </mesh>
+      <mesh ref={shellBRef}>
+        <sphereGeometry args={[0.95, 22, 22]} />
+        <meshPhysicalMaterial
+          color={tertiaryColor}
+          transparent
+          opacity={0.08}
+          transmission={0.7}
+          roughness={0.2}
+          thickness={0.2}
         />
       </mesh>
 
@@ -142,6 +189,17 @@ export default function AiOrbScene({ active = true }: AiOrbSceneProps) {
         </mesh>
       </group>
 
+      <group ref={trailRingRef}>
+        <mesh rotation={[Math.PI / 2.7, Math.PI / 4.2, Math.PI / 5]}>
+          <torusGeometry args={[1.24, 0.016, 10, 52, Math.PI * 0.65]} />
+          <meshStandardMaterial color={secondaryColor} emissive={secondaryColor} emissiveIntensity={0.7} transparent opacity={0.72} />
+        </mesh>
+        <mesh rotation={[Math.PI / 1.9, Math.PI / 5.2, Math.PI / 3.8]}>
+          <torusGeometry args={[1.56, 0.012, 10, 52, Math.PI * 0.52]} />
+          <meshStandardMaterial color={tertiaryColor} emissive={tertiaryColor} emissiveIntensity={0.58} transparent opacity={0.58} />
+        </mesh>
+      </group>
+
       {/* Particle sphere with a sparse set of neural-style connections. */}
       <points ref={particlesRef}>
         <bufferGeometry>
@@ -158,7 +216,8 @@ export default function AiOrbScene({ active = true }: AiOrbSceneProps) {
         </lineSegments>
       )}
 
-      <Sparkles count={24} scale={2.6} size={1.5} speed={active ? 0.25 : 0.08} color={secondaryColor} />
+      <Sparkles count={visualState === "processing" ? 36 : 24} scale={2.6} size={1.5} speed={isActive ? 0.28 : 0.08} color={secondaryColor} />
+      {isDegraded && <Sparkles count={12} scale={2.2} size={1.8} speed={0.14} color={coreColor} />}
     </>
   );
 }

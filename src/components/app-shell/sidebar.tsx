@@ -14,7 +14,7 @@ export function Sidebar({ collapsed }: { collapsed: boolean }) {
     <aside
       className={cn(
         "hidden shrink-0 overflow-y-auto border-r border-sidebar-border bg-sidebar transition-[width] duration-200 md:block",
-        collapsed ? "w-16" : "w-64"
+        collapsed ? "w-14" : "w-56 lg:w-60"
       )}
     >
       <div className={cn("flex h-14 items-center border-b border-sidebar-border", collapsed ? "justify-center" : "px-4")}>

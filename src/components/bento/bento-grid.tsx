@@ -14,7 +14,9 @@ import type { ModuleKey } from "@/components/app-shell/nav-config";
  */
 export function BentoGrid({ className, children }: { className?: string; children: React.ReactNode }) {
   return (
-    <div className={cn("grid grid-cols-1 gap-4 sm:grid-cols-6 lg:grid-cols-12", className)}>{children}</div>
+    <div className={cn("grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-12 lg:gap-5", className)}>
+      {children}
+    </div>
   );
 }
 
@@ -27,12 +29,14 @@ const MODULE_VAR: Record<ModuleKey, string> = {
   admin: "var(--module-admin)",
 };
 
-const COL_SPAN: Record<3 | 4 | 6 | 8 | 12, string> = {
-  3: "sm:col-span-3 lg:col-span-3",
-  4: "sm:col-span-3 lg:col-span-4",
-  6: "sm:col-span-6 lg:col-span-6",
-  8: "sm:col-span-6 lg:col-span-8",
-  12: "sm:col-span-6 lg:col-span-12",
+const COL_SPAN: Record<2 | 3 | 4 | 5 | 6 | 8 | 12, string> = {
+  2: "sm:col-span-1 lg:col-span-2",
+  3: "sm:col-span-1 lg:col-span-3",
+  4: "sm:col-span-2 lg:col-span-4",
+  5: "sm:col-span-2 lg:col-span-5",
+  6: "sm:col-span-2 lg:col-span-6",
+  8: "sm:col-span-2 lg:col-span-8",
+  12: "sm:col-span-2 lg:col-span-12",
 };
 
 const ROW_SPAN: Record<1 | 2 | 3, string> = {
@@ -42,7 +46,7 @@ const ROW_SPAN: Record<1 | 2 | 3, string> = {
 };
 
 export interface BentoCardProps extends React.ComponentProps<"div"> {
-  colSpan?: 3 | 4 | 6 | 8 | 12;
+  colSpan?: 2 | 3 | 4 | 5 | 6 | 8 | 12;
   rowSpan?: 1 | 2 | 3;
   /** Tints the card's top accent bar and any icon passed via `accentSlot`. */
   accentModule?: ModuleKey;
@@ -69,7 +73,7 @@ export function BentoCard({
   return (
     <Card
       className={cn(
-        "relative flex flex-col gap-3 p-5",
+        "relative flex min-w-0 flex-col gap-3 p-5",
         COL_SPAN[colSpan],
         ROW_SPAN[rowSpan],
         variant === "glass" && "glass-panel gradient-border shadow-elevated",

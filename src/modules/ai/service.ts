@@ -4,6 +4,7 @@ import { Capability, ForbiddenError, roleHasCapability } from "@/core/permission
 import type { ActiveMembership } from "@/core/tenancy";
 import { encryptSecret } from "@/lib/crypto";
 import type { ListAIUsageQuery, UpdateAIConfigInput } from "./schemas";
+import type { IntelligenceCoreState } from "@/components/three/ai-orb";
 
 function requireCapability(acting: ActiveMembership, capability: Capability) {
   if (!roleHasCapability(acting.role, capability)) {
@@ -94,4 +95,46 @@ export async function listAIUsage(acting: ActiveMembership, query: ListAIUsageQu
       totalOutputTokens: totals._sum.outputTokens ?? 0,
     },
   };
+}
+
+export async function getAIOperationalState(acting: ActiveMembership): Promise<{
+  state: IntelligenceCoreState;
+  label: string;
+}> {
+  requireCapability(acting, Capability.ORG_VIEW_MEMBERS);
+
+  const config = await getAIConfig(acting);
+  if (!config.enabled || !config.provider || !config.hasApiKey) {
+    return { state: "not-configured", label: "Not configured" };
+  }
+
+  if (config.provider !== "ANTHROPIC") {
+    return { state: "error", label: "Configured provider is not yet available" };
+  }
+
+  const recent = await prisma.aIUsageLog.findMany({
+    where: { organisationId: acting.organisationId },
+    orderBy: { createdAt: "desc" },
+    take: 10,
+  });
+
+  if (recent.length === 0) {
+    return { state: "ready", label: "Ready" };
+  }
+
+  const latest = recent[0];
+  const veryRecent = Date.now() - latest.createdAt.getTime() <= 20_000;
+  if (veryRecent && latest.succeeded) {
+    return { state: "processing", label: "Processing recent AI workload" };
+  }
+
+  const failureCount = recent.filter((entry) => !entry.succeeded).length;
+  if (failureCount === recent.length) {
+    return { state: "error", label: "Recent AI calls are failing" };
+  }
+  if (failureCount > 0) {
+    return { state: "degraded", label: "Intermittent AI errors detected" };
+  }
+
+  return { state: "ready", label: "Ready" };
 }

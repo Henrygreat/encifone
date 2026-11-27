@@ -28,6 +28,7 @@ export interface MetricCardProps {
   /** Explains how the figure is calculated — shown on hover via a small
    * info affordance, per the brief's "tooltip explaining the metric." */
   tooltip?: string;
+  colSpan?: BentoCardProps["colSpan"];
   children?: ReactNode;
 }
 
@@ -49,6 +50,7 @@ export function MetricCard({
   trend,
   sparkline,
   tooltip,
+  colSpan = 3,
   children,
 }: MetricCardProps) {
   const TrendIcon = trend ? TREND_ICON[trend.direction] : null;
@@ -56,9 +58,9 @@ export function MetricCard({
   const trendIsPositive = trend && (trend.direction === good || trend.direction === "flat");
 
   const content = (
-    <BentoCard colSpan={3} accentModule={accentModule} className="justify-between">
+    <BentoCard colSpan={colSpan} accentModule={accentModule} className="min-w-0 justify-between">
       <div className="flex items-start justify-between gap-2">
-        <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
+        <span className="flex min-w-0 items-start gap-1.5 text-sm leading-snug text-muted-foreground">
           {label}
           {tooltip && (
             <Tooltip>
@@ -78,7 +80,7 @@ export function MetricCard({
       </div>
 
       <div className="flex items-end justify-between gap-3">
-        <span className="min-w-0 truncate text-3xl font-semibold tracking-tight text-foreground tabular-nums">
+        <span className="min-w-0 text-[1.65rem] font-semibold leading-none tracking-tight text-foreground tabular-nums sm:text-[1.85rem]">
           {value}
         </span>
         {sparkline && sparkline.length > 1 && (
@@ -100,5 +102,5 @@ export function MetricCard({
     </BentoCard>
   );
 
-  return href ? <Link href={href}>{content}</Link> : content;
+  return href ? <Link href={href} className="block min-w-0">{content}</Link> : content;
 }

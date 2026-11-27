@@ -18,23 +18,23 @@ export function AppShell({
   const [collapsed, setCollapsed] = useState(false);
 
   return (
-    <div className="relative flex h-screen flex-col">
+    <div className="relative flex h-screen min-w-0 flex-col overflow-x-clip">
       {/* Aurora theme's ambient glow — renders nothing in Professional
           Dark/Light (see .aurora-atmosphere in globals.css). Mounted once
           here, never per-page or per-card. */}
       <div className="aurora-atmosphere" aria-hidden="true" />
-      <div className="relative z-10 flex h-full flex-col">
+      <div className="relative z-10 flex h-full min-w-0 flex-col">
         <TopBar
           collapsed={collapsed}
           onToggleSidebar={() => setCollapsed((c) => !c)}
           activeOrganisationId={activeOrganisationId}
           user={user}
         />
-        <div className="flex flex-1 overflow-hidden">
+        <div className="flex min-w-0 flex-1 overflow-hidden">
           <Sidebar collapsed={collapsed} />
-          <main className="flex flex-1 flex-col overflow-y-auto bg-background">
+          <main className="flex min-w-0 flex-1 flex-col overflow-y-auto overflow-x-clip bg-background">
             <Breadcrumbs />
-            <div className="flex-1">{children}</div>
+            <div className="min-w-0 flex-1">{children}</div>
           </main>
         </div>
         <CommandPalette />

@@ -21,7 +21,7 @@ export function MobileNav() {
           <Menu className="size-5" />
         </Button>
       </SheetTrigger>
-      <SheetContent side="left" className="w-72 bg-sidebar p-0 text-sidebar-foreground">
+      <SheetContent side="left" className="w-64 bg-sidebar p-0 text-sidebar-foreground sm:w-72">
         <SheetHeader className="h-14 flex-row items-center border-b border-sidebar-border px-4">
           <SheetTitle asChild>
             <Link href="/dashboard" onClick={() => setOpen(false)} className="flex items-center gap-2 text-sm font-semibold">

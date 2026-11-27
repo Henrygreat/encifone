@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { BentoEmptyState } from "@/components/bento/bento-grid";
+import type { IntelligenceCoreState } from "@/components/three/ai-orb";
 
 /**
  * The dashboard's "AI insights" panel — shows the organisation's real
@@ -9,7 +10,19 @@ import { BentoEmptyState } from "@/components/bento/bento-grid";
  * (lead qualification, deal risk, next-best-action, client summaries)
  * rather than inventing a digest that doesn't exist yet.
  */
-export function AIInsightCard({ configured, provider }: { configured: boolean; provider?: string | null }) {
+export function AIInsightCard({
+  configured,
+  provider,
+  state,
+  stateLabel,
+}: {
+  configured: boolean;
+  provider?: string | null;
+  state: IntelligenceCoreState;
+  stateLabel: string;
+}) {
+  const badgeVariant = state === "error" ? "destructive" : state === "degraded" ? "secondary" : "outline";
+
   if (!configured) {
     return (
       <BentoEmptyState
@@ -26,6 +39,10 @@ export function AIInsightCard({ configured, provider }: { configured: boolean; p
 
   return (
     <div className="flex flex-col gap-3">
+      <div className="flex items-center gap-2">
+        <Badge variant={badgeVariant}>{stateLabel}</Badge>
+        <span className="text-xs text-muted-foreground">Provider: {provider ?? "Configured"}</span>
+      </div>
       <p className="text-sm text-foreground">
         AI is enabled for your organisation{provider ? ` (${provider})` : ""}. Deterministic, explainable
         results are always shown first — the AI narrative is an optional addition, never a replacement.

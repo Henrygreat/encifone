@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -25,12 +25,10 @@ type ResetInput = z.infer<typeof resetSchema>;
 
 export default function PortalResetPasswordPage() {
   const router = useRouter();
-  const [token, setToken] = useState("");
+  const [token] = useState(() =>
+    typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("token") ?? "" : ""
+  );
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    setToken(new URLSearchParams(window.location.search).get("token") ?? "");
-  }, []);
 
   const {
     register,

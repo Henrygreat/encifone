@@ -20,7 +20,7 @@ export const MODULE_VAR: Record<ModuleKey, string> = {
  * collapsing the rest behind a "+N more" toggle — the "less intrusive
  * presentation of planned modules" requirement. Real (href-having) items
  * are never hidden; only the placeholder rows collapse. */
-const VISIBLE_PLANNED_PER_GROUP = 2;
+const VISIBLE_PLANNED_PER_GROUP = 0;
 
 function NavGroupSection({ group, iconOnly }: { group: (typeof NAV_GROUPS)[number]; iconOnly: boolean }) {
   const pathname = usePathname();
@@ -65,7 +65,7 @@ function NavGroupSection({ group, iconOnly }: { group: (typeof NAV_GROUPS)[numbe
             <div
               key={item.label}
               className="flex items-center justify-between gap-2 rounded-lg px-2 py-1 text-xs text-sidebar-foreground/35"
-              title="Not available yet — see docs/MASTER_ROADMAP.md"
+              title="Available soon"
             >
               <span className="flex items-center gap-2">
                 <Icon className="size-3.5" aria-hidden="true" />
@@ -81,7 +81,7 @@ function NavGroupSection({ group, iconOnly }: { group: (typeof NAV_GROUPS)[numbe
           className="flex items-center gap-1 px-2 py-1 text-left text-xs text-sidebar-foreground/40 hover:text-sidebar-foreground/70"
         >
           <ChevronDown className={cn("size-3 transition-transform", expanded && "rotate-180")} aria-hidden="true" />
-          {expanded ? "Show less" : `+${hiddenCount} more (planned)`}
+          {expanded ? "Hide upcoming" : `${hiddenCount} upcoming modules`}
         </button>
       )}
     </div>
