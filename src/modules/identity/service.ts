@@ -222,7 +222,13 @@ export async function getOrganisationSettings(acting: ActiveMembership) {
   }
   return prisma.organisation.findUniqueOrThrow({
     where: { id: acting.organisationId },
-    select: { id: true, name: true, conversionRequiresContract: true, conversionRequiresPayment: true },
+    select: {
+      id: true,
+      name: true,
+      conversionRequiresContract: true,
+      conversionRequiresPayment: true,
+      autoStartOnboarding: true,
+    },
   });
 }
 
@@ -239,7 +245,13 @@ export async function updateOrganisationSettings(acting: ActiveMembership, input
   const organisation = await prisma.organisation.update({
     where: { id: acting.organisationId },
     data: input,
-    select: { id: true, name: true, conversionRequiresContract: true, conversionRequiresPayment: true },
+    select: {
+      id: true,
+      name: true,
+      conversionRequiresContract: true,
+      conversionRequiresPayment: true,
+      autoStartOnboarding: true,
+    },
   });
 
   await writeAuditLog({

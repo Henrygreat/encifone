@@ -37,5 +37,6 @@ export type CreateOrganisationInput = z.infer<typeof createOrganisationSchema>;
 export const updateOrganisationSettingsSchema = z.object({
   conversionRequiresContract: z.boolean().optional(),
   conversionRequiresPayment: z.boolean().optional(),
+  autoStartOnboarding: z.boolean().optional(),
 });
 export type UpdateOrganisationSettingsInput = z.infer<typeof updateOrganisationSettingsSchema>;
