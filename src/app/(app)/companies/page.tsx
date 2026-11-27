@@ -6,12 +6,13 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ChevronDown } from "lucide-react";
+import { Bookmark, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -25,6 +26,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -72,6 +74,18 @@ interface CompanyListResponse {
   totalPages: number;
 }
 
+interface SavedViewFilters {
+  search?: string;
+  status?: string;
+}
+
+interface SavedView {
+  id: string;
+  name: string;
+  ownerId: string | null;
+  filters: SavedViewFilters;
+}
+
 const quickCreateSchema = z.object({
   name: z.string().min(1, "Company name is required").max(200),
   industry: z.string().max(120).optional(),
@@ -93,6 +107,9 @@ export default function CompaniesPage() {
   const [page, setPage] = useState(1);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [saveViewOpen, setSaveViewOpen] = useState(false);
+  const [saveViewName, setSaveViewName] = useState("");
+  const [saveViewShared, setSaveViewShared] = useState(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ["companies", debouncedSearch, status, page],
@@ -114,6 +131,57 @@ export default function CompaniesPage() {
       return res.json();
     },
   });
+
+  const { data: savedViews } = useQuery({
+    queryKey: ["saved-views", "COMPANY"],
+    queryFn: async (): Promise<{ views: SavedView[] }> => {
+      const res = await fetch(`/api/v1/saved-views?entityType=COMPANY`);
+      if (!res.ok) throw new Error("Could not load saved views.");
+      return res.json();
+    },
+  });
+
+  function applySavedView(view: SavedView) {
+    setPage(1);
+    setSearch(view.filters.search ?? "");
+    setStatus(view.filters.status ?? "ALL");
+    toast.success(`Applied "${view.name}".`);
+  }
+
+  async function onSaveView() {
+    if (!saveViewName.trim()) return;
+    const res = await fetch(`/api/v1/saved-views`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        entityType: "COMPANY",
+        name: saveViewName.trim(),
+        filters: { search: search || undefined, status: status === "ALL" ? undefined : status },
+        shared: saveViewShared,
+      }),
+    });
+    const result = await res.json();
+    if (!res.ok) {
+      toast.error(result.error ?? "Could not save this view.");
+      return;
+    }
+    await queryClient.invalidateQueries({ queryKey: ["saved-views", "COMPANY"] });
+    setSaveViewName("");
+    setSaveViewShared(false);
+    setSaveViewOpen(false);
+    toast.success(`Saved "${result.name}".`);
+  }
+
+  async function onDeleteView(view: SavedView) {
+    const res = await fetch(`/api/v1/saved-views/${view.id}`, { method: "DELETE" });
+    if (!res.ok) {
+      const result = await res.json();
+      toast.error(result.error ?? "Could not delete this view.");
+      return;
+    }
+    await queryClient.invalidateQueries({ queryKey: ["saved-views", "COMPANY"] });
+    toast.success(`Deleted "${view.name}".`);
+  }
 
   const {
     register,
@@ -203,6 +271,46 @@ export default function CompaniesPage() {
             Organisations you do business with, and the contacts and deals tied to them.
           </p>
         </div>
+        <div className="flex flex-wrap gap-2">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline">
+                <Bookmark className="size-4" /> Views <ChevronDown className="size-3" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent>
+              {savedViews?.views.length ? (
+                savedViews.views.map((view) => (
+                  <DropdownMenuItem
+                    key={view.id}
+                    onClick={() => applySavedView(view)}
+                    className="flex items-center justify-between gap-2"
+                  >
+                    <span>
+                      {view.name}
+                      {view.ownerId === null && (
+                        <span className="ml-1.5 text-xs text-muted-foreground">(shared)</span>
+                      )}
+                    </span>
+                    <button
+                      type="button"
+                      className="text-xs text-muted-foreground hover:text-destructive"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDeleteView(view);
+                      }}
+                    >
+                      Delete
+                    </button>
+                  </DropdownMenuItem>
+                ))
+              ) : (
+                <DropdownMenuItem disabled>No saved views yet</DropdownMenuItem>
+              )}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => setSaveViewOpen(true)}>Save current view…</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
             <Button style={{ background: "var(--module-crm)" }}>New company</Button>
@@ -237,6 +345,7 @@ export default function CompaniesPage() {
             </form>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
@@ -384,6 +493,37 @@ export default function CompaniesPage() {
           </>
         )}
       </div>
+
+      <Dialog open={saveViewOpen} onOpenChange={setSaveViewOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Save current view</DialogTitle>
+            <DialogDescription>
+              Saves the current search and status filter — not the selected rows.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="viewName">View name</Label>
+              <Input id="viewName" value={saveViewName} onChange={(e) => setSaveViewName(e.target.value)} />
+            </div>
+            <div className="flex items-center justify-between">
+              <Label htmlFor="viewShared" className="flex flex-col gap-0.5">
+                <span>Share with the team</span>
+                <span className="text-xs font-normal text-muted-foreground">
+                  Off = visible only to you
+                </span>
+              </Label>
+              <Switch id="viewShared" checked={saveViewShared} onCheckedChange={setSaveViewShared} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button type="button" disabled={!saveViewName.trim()} onClick={onSaveView}>
+              Save view
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
