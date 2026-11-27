@@ -435,3 +435,10 @@ New reusable components (`src/components/ui/`): `PageHeader`, `MetricCard`, `Spa
 - Dashboard's one remaining hardcoded `color: "#060B14"` (a deliberate contrast pairing, not a token gap, per the earlier session's audit) not yet migrated to `var(--module-on-accent)`.
 - Breakpoint-specific visual verification (375/768/1024/1280/1440/1920px) — still blocked on the same "no browser in this environment" limitation noted throughout Phase 2A–2C; every claim above is grounded in server-rendered HTML + a clean build, not an actual rendered screenshot.
 - **The brief's "Phase 5" (roadmap's real Phase 3 — Client Portal + Onboarding) has not been started.** This is the one genuinely large net-new module left: portal invitation/auth, client-scoped data isolation (a new tenant-isolation surface distinct from the existing org-membership model), document storage with expiring signed URLs, and an onboarding-template engine. Flagged to the owner as a scope/sequencing decision rather than started unprompted mid-session, given its size and security surface.
+
+
+## Phase 4 ? Operational finance (2026-11-27)
+
+Implemented and validated locally on `feature/phase-4-complete-implementation` in `42268707704f5b56ebc77c20800e8b02a2081e60`. The existing project, request and time-entry modules now feed approved-work invoice drafts. The finance workflows cover estimate conversion, invoice issuance and PDF, manual payment allocation and credit notes, expenses, scheduled subscription and retainer billing, portal finance, base-currency reporting, forecasts and dashboard MRR.
+
+All 116 Vitest tests passed. Two authenticated Chromium workflows passed against the standalone Docker app, covering staff draft-to-payment and client portal estimate-to-invoice access. The app readiness check returned HTTP 200, and the healthy worker registered and completed a scheduled recurring billing job. Prisma applied all 16 migrations to a fresh local database and reported no schema drift. The [Phase 4 Capstone Report](PHASE_4_CAPSTONE_REPORT.md) records security coverage, warnings, migration order, operational limits and release gates.
