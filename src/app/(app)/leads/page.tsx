@@ -6,13 +6,12 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Bookmark, ChevronDown } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Select,
@@ -25,7 +24,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -47,8 +45,10 @@ import {
 } from "@/components/ui/dialog";
 import { BentoEmptyState } from "@/components/bento/bento-grid";
 import { PageHeader } from "@/components/ui/page-header";
+import { SavedViewSelector, SaveViewDialog } from "@/components/ui/saved-view-selector";
 import { formatEnumLabel } from "@/lib/utils";
 import { useDebouncedValue } from "@/lib/use-debounced-value";
+import { useSavedViews, type SavedView } from "@/lib/use-saved-views";
 import { LEAD_STATUSES } from "@/modules/crm/constants";
 
 interface MemberOption {
@@ -88,13 +88,6 @@ interface SavedViewFilters {
   status?: string;
 }
 
-interface SavedView {
-  id: string;
-  name: string;
-  ownerId: string | null;
-  filters: SavedViewFilters;
-}
-
 const quickCreateSchema = z.object({
   firstName: z.string().max(120).optional(),
   lastName: z.string().max(120).optional(),
@@ -124,9 +117,7 @@ export default function LeadsPage() {
   const [convertingId, setConvertingId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [scoreLead, setScoreLead] = useState<LeadRow | null>(null);
-  const [saveViewOpen, setSaveViewOpen] = useState(false);
-  const [saveViewName, setSaveViewName] = useState("");
-  const [saveViewShared, setSaveViewShared] = useState(false);
+  const savedViewsHook = useSavedViews<SavedViewFilters>("LEAD");
 
   const { data, isLoading } = useQuery({
     queryKey: ["leads", debouncedSearch, status, page],
@@ -149,55 +140,11 @@ export default function LeadsPage() {
     },
   });
 
-  const { data: savedViews } = useQuery({
-    queryKey: ["saved-views", "LEAD"],
-    queryFn: async (): Promise<{ views: SavedView[] }> => {
-      const res = await fetch(`/api/v1/saved-views?entityType=LEAD`);
-      if (!res.ok) throw new Error("Could not load saved views.");
-      return res.json();
-    },
-  });
-
-  function applySavedView(view: SavedView) {
+  function applySavedView(view: SavedView<SavedViewFilters>) {
     setPage(1);
     setSearch(view.filters.search ?? "");
     setStatus(view.filters.status ?? "ALL");
     toast.success(`Applied "${view.name}".`);
-  }
-
-  async function onSaveView() {
-    if (!saveViewName.trim()) return;
-    const res = await fetch(`/api/v1/saved-views`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        entityType: "LEAD",
-        name: saveViewName.trim(),
-        filters: { search: search || undefined, status: status === "ALL" ? undefined : status },
-        shared: saveViewShared,
-      }),
-    });
-    const result = await res.json();
-    if (!res.ok) {
-      toast.error(result.error ?? "Could not save this view.");
-      return;
-    }
-    await queryClient.invalidateQueries({ queryKey: ["saved-views", "LEAD"] });
-    setSaveViewName("");
-    setSaveViewShared(false);
-    setSaveViewOpen(false);
-    toast.success(`Saved "${result.name}".`);
-  }
-
-  async function onDeleteView(view: SavedView) {
-    const res = await fetch(`/api/v1/saved-views/${view.id}`, { method: "DELETE" });
-    if (!res.ok) {
-      const result = await res.json();
-      toast.error(result.error ?? "Could not delete this view.");
-      return;
-    }
-    await queryClient.invalidateQueries({ queryKey: ["saved-views", "LEAD"] });
-    toast.success(`Deleted "${view.name}".`);
   }
 
   const { data: qualification, isLoading: scoreLoading } = useQuery({
@@ -323,42 +270,12 @@ export default function LeadsPage() {
         description="Pre-qualification records — convert into a contact and company once qualified."
         actions={
         <>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline">
-                <Bookmark className="size-4" /> Views <ChevronDown className="size-3" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent>
-              {savedViews?.views.length ? (
-                savedViews.views.map((view) => (
-                  // Two independent menu items, not a button nested inside
-                  // one — a nested <button> isn't reachable by arrow-key
-                  // navigation in a Radix dropdown (only the outer
-                  // DropdownMenuItem is), so a keyboard-only user would have
-                  // had no way to delete a view at all.
-                  <div key={view.id} role="group" aria-label={view.name}>
-                    <DropdownMenuItem onClick={() => applySavedView(view)}>
-                      {view.name}
-                      {view.ownerId === null && (
-                        <span className="ml-1.5 text-xs text-muted-foreground">(shared)</span>
-                      )}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={() => onDeleteView(view)}
-                      className="pl-6 text-xs text-muted-foreground focus:text-destructive"
-                    >
-                      Delete &ldquo;{view.name}&rdquo;
-                    </DropdownMenuItem>
-                  </div>
-                ))
-              ) : (
-                <DropdownMenuItem disabled>No saved views yet</DropdownMenuItem>
-              )}
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => setSaveViewOpen(true)}>Save current view…</DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <SavedViewSelector
+            views={savedViewsHook.views}
+            onApply={applySavedView}
+            onDelete={savedViewsHook.remove}
+            onSaveNew={() => savedViewsHook.setSaveDialogOpen(true)}
+          />
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
             <Button style={{ background: "var(--module-crm)", color: "var(--module-on-accent)" }}>New lead</Button>
@@ -642,36 +559,18 @@ export default function LeadsPage() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={saveViewOpen} onOpenChange={setSaveViewOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Save current view</DialogTitle>
-            <DialogDescription>
-              Saves the current search and status filter — not the selected rows.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex flex-col gap-4">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="viewName">View name</Label>
-              <Input id="viewName" value={saveViewName} onChange={(e) => setSaveViewName(e.target.value)} />
-            </div>
-            <div className="flex items-center justify-between">
-              <Label htmlFor="viewShared" className="flex flex-col gap-0.5">
-                <span>Share with the team</span>
-                <span className="text-xs font-normal text-muted-foreground">
-                  Off = visible only to you
-                </span>
-              </Label>
-              <Switch id="viewShared" checked={saveViewShared} onCheckedChange={setSaveViewShared} />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button type="button" disabled={!saveViewName.trim()} onClick={onSaveView}>
-              Save view
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <SaveViewDialog
+        open={savedViewsHook.saveDialogOpen}
+        onOpenChange={savedViewsHook.setSaveDialogOpen}
+        description="Saves the current search and status filter — not the selected rows."
+        name={savedViewsHook.name}
+        onNameChange={savedViewsHook.setName}
+        shared={savedViewsHook.shared}
+        onSharedChange={savedViewsHook.setShared}
+        onSave={() =>
+          savedViewsHook.save({ search: search || undefined, status: status === "ALL" ? undefined : status })
+        }
+      />
     </div>
   );
 }
