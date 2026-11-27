@@ -18,7 +18,9 @@ export interface ActionCentreItem {
   href: string;
 }
 
-const STALLED_DAYS = 14;
+/** Also used by src/modules/sales/analytics.ts's stalled-opportunity count
+ * so "stalled" means the same thing everywhere it's reported. */
+export const STALLED_DAYS = 14;
 const CLOSING_SOON_DAYS = 7;
 
 // No per-record detail pages exist yet (docs/CRM_USER_GUIDE.md §7) — an

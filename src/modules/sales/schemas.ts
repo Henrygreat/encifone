@@ -67,3 +67,8 @@ export const moveOpportunitySchema = z.object({
   lostReason: z.string().max(500).optional(),
 });
 export type MoveOpportunityInput = z.infer<typeof moveOpportunitySchema>;
+
+export const salesVelocityQuerySchema = z.object({
+  pipelineId: z.string().min(1).optional(),
+});
+export type SalesVelocityQuery = z.infer<typeof salesVelocityQuerySchema>;

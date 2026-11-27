@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { formatMoneyMinor } from "@/lib/money";
 import { getDashboardSummary } from "@/modules/dashboard/service";
 import { getActionCentreItems, type ActionCentreSeverity } from "@/modules/intelligence/action-centre";
+import { getSalesVelocityMetrics } from "@/modules/sales/analytics";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -53,13 +54,17 @@ function greeting(hour: number) {
 export default async function DashboardPage() {
   const acting = await requireActiveMembership();
 
-  const [session, organisation, memberCount, summary, actionCentreItems] = await Promise.all([
+  const [session, organisation, memberCount, summary, actionCentreItems, velocity] = await Promise.all([
     getServerAuthSession(),
     prisma.organisation.findUniqueOrThrow({ where: { id: acting.organisationId } }),
     prisma.membership.count({ where: { organisationId: acting.organisationId, status: "ACTIVE" } }),
     getDashboardSummary(acting),
     getActionCentreItems(acting),
+    getSalesVelocityMetrics(acting),
   ]);
+
+  const stageDurationsWithDeals = velocity.stageDurations.filter((s) => s.segmentCount > 0);
+  const maxStageDays = Math.max(1, ...stageDurationsWithDeals.map((s) => s.avgDays ?? 0));
 
   const firstName = session?.user?.name?.split(" ")[0] ?? "there";
   const SEVERITY_ORDER: Record<ActionCentreSeverity, number> = { urgent: 0, warning: 1, info: 2 };
@@ -242,6 +247,75 @@ export default async function DashboardPage() {
               </Link>
             </Button>
           </div>
+        </BentoCard>
+
+        {/* Sales velocity — real aggregates from OpportunityStageHistory and
+            each deal's own createdAt/wonAt/lostAt (src/modules/sales/analytics.ts),
+            never a fabricated figure. */}
+        <BentoCard colSpan={12} accentModule="sales">
+          <span className="text-sm font-medium text-foreground">Sales velocity &amp; stage duration</span>
+          {velocity.salesCycle.wonCount === 0 &&
+          velocity.salesCycle.lostCount === 0 &&
+          stageDurationsWithDeals.length === 0 ? (
+            <BentoEmptyState
+              title="No stage history yet"
+              description="Move a deal through your pipeline to start seeing average time-in-stage and sales-cycle length here."
+            />
+          ) : (
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
+              <div className="flex flex-col gap-3 sm:col-span-2">
+                <p className="text-xs text-muted-foreground">Average time spent per stage</p>
+                {stageDurationsWithDeals.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No completed stage segments yet.</p>
+                ) : (
+                  <ul className="flex flex-col gap-2">
+                    {stageDurationsWithDeals.map((stage) => (
+                      <li key={stage.stageId} className="flex items-center gap-3 text-sm">
+                        <span className="w-28 shrink-0 truncate text-foreground">{stage.stageName}</span>
+                        <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
+                          <div
+                            className="h-full rounded-full"
+                            style={{
+                              width: `${Math.max(4, ((stage.avgDays ?? 0) / maxStageDays) * 100)}%`,
+                              background: "var(--module-sales)",
+                            }}
+                          />
+                        </div>
+                        <span className="w-16 shrink-0 text-right text-muted-foreground">
+                          {stage.avgDays ?? 0}d
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+              <div className="flex flex-col gap-3">
+                <p className="text-xs text-muted-foreground">Sales cycle</p>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">Avg. days to close (won)</span>
+                  <span className="text-foreground">
+                    {velocity.salesCycle.avgDaysToWon === null ? "—" : `${velocity.salesCycle.avgDaysToWon}d`}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">Avg. days to lose</span>
+                  <span className="text-foreground">
+                    {velocity.salesCycle.avgDaysToLost === null ? "—" : `${velocity.salesCycle.avgDaysToLost}d`}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">Stalled deals</span>
+                  <span className="text-foreground">
+                    {velocity.stalled.count > 0 ? (
+                      <Badge variant="destructive">{velocity.stalled.count}</Badge>
+                    ) : (
+                      "0"
+                    )}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
         </BentoCard>
 
         {/* AI insights — where configured */}
