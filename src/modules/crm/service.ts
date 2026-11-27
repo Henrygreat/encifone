@@ -4,6 +4,7 @@ import { writeAuditLog } from "@/core/audit";
 import { Capability, ForbiddenError, roleHasCapability } from "@/core/permissions";
 import type { ActiveMembership } from "@/core/tenancy";
 import { NotFoundError } from "@/lib/api";
+import { calculateLeadScore } from "@/modules/intelligence/lead-scoring";
 import type {
   ConvertLeadInput,
   CreateCompanyInput,
@@ -421,6 +422,20 @@ export async function createLead(acting: ActiveMembership, input: CreateLeadInpu
     await assertMembershipInOrg(acting.organisationId, input.ownerId);
   }
 
+  const now = new Date();
+  const priority = input.priority ?? "MEDIUM";
+  // Deterministic, explainable — see src/modules/intelligence/lead-scoring.ts.
+  const { score } = calculateLeadScore({
+    email: input.email ?? null,
+    phone: input.phone ?? null,
+    companyName: input.companyName ?? null,
+    source: input.source ?? null,
+    priority,
+    estimatedValueMinor: input.estimatedValueMinor ?? null,
+    nextFollowUpAt: input.nextFollowUpAt ?? null,
+    createdAt: now,
+  });
+
   const lead = await prisma.lead.create({
     data: {
       organisationId: acting.organisationId,
@@ -431,13 +446,15 @@ export async function createLead(acting: ActiveMembership, input: CreateLeadInpu
       companyName: input.companyName,
       source: input.source,
       status: input.status ?? LeadStatus.NEW,
-      priority: input.priority ?? "MEDIUM",
+      priority,
       estimatedValueMinor: input.estimatedValueMinor,
       currency: input.currency ?? "GBP",
       ownerId: input.ownerId,
       nextFollowUpAt: input.nextFollowUpAt,
       tags: input.tags ?? [],
       notes: input.notes,
+      score,
+      createdAt: now,
     },
   });
 
@@ -473,7 +490,11 @@ export async function updateLead(acting: ActiveMembership, id: string, input: Up
         data: { leadId: id, fromOwnerId: existing.ownerId, toOwnerId: input.ownerId ?? null },
       });
     }
-    return updated;
+    // Recompute from the merged, post-update record — not the pre-update
+    // one — so a field changed by this very call is reflected in the
+    // new score.
+    const { score } = calculateLeadScore(updated);
+    return score === updated.score ? updated : tx.lead.update({ where: { id }, data: { score } });
   });
 
   await writeAuditLog({
