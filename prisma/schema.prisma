@@ -1172,6 +1172,10 @@ enum OnboardingStatus {
 enum OnboardingStepStatus {
   PENDING
   IN_PROGRESS
+  // A requiresApproval=true step the client has submitted, pending an
+  // internal reviewer's decision — never auto-advances to COMPLETED on
+  // its own.
+  AWAITING_APPROVAL
   COMPLETED
   SKIPPED
   BLOCKED
@@ -1265,6 +1269,10 @@ model ClientOnboardingStep {
   completedByMembershipId String?
   approvedByMembershipId  String?
   approvedAt              DateTime?
+  // Set on either an approval or a rejection — a rejection sends the step
+  // back to PENDING and this note is the only place the client sees why,
+  // so it is never left blank on a rejection.
+  reviewNote              String?
   createdAt               DateTime              @default(now())
   updatedAt               DateTime              @updatedAt
 
