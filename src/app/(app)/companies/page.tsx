@@ -6,10 +6,12 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -19,6 +21,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Table,
   TableBody,
@@ -40,6 +48,11 @@ import { BentoEmptyState } from "@/components/bento/bento-grid";
 import { formatEnumLabel } from "@/lib/utils";
 import { useDebouncedValue } from "@/lib/use-debounced-value";
 import { COMPANY_STATUSES } from "@/modules/crm/constants";
+
+interface MemberOption {
+  id: string;
+  user: { name: string | null; email: string };
+}
 
 interface CompanyRow {
   id: string;
@@ -79,6 +92,7 @@ export default function CompaniesPage() {
   const [status, setStatus] = useState<string>("ALL");
   const [page, setPage] = useState(1);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const { data, isLoading } = useQuery({
     queryKey: ["companies", debouncedSearch, status, page],
@@ -88,6 +102,15 @@ export default function CompaniesPage() {
       if (status !== "ALL") params.set("status", status);
       const res = await fetch(`/api/v1/companies?${params.toString()}`);
       if (!res.ok) throw new Error("Could not load companies.");
+      return res.json();
+    },
+  });
+
+  const { data: members } = useQuery({
+    queryKey: ["members-options"],
+    queryFn: async (): Promise<{ members: MemberOption[] }> => {
+      const res = await fetch(`/api/v1/memberships`);
+      if (!res.ok) throw new Error("Could not load organisation members.");
       return res.json();
     },
   });
@@ -120,6 +143,56 @@ export default function CompaniesPage() {
     setDialogOpen(false);
     toast.success(`${input.name} was added to your companies.`);
   }
+
+  function toggleAll(items: CompanyRow[], checked: boolean) {
+    setSelectedIds(checked ? new Set(items.map((c) => c.id)) : new Set());
+  }
+
+  function toggleOne(id: string, checked: boolean) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  }
+
+  async function afterBulkAction(message: string) {
+    await queryClient.invalidateQueries({ queryKey: ["companies"] });
+    setSelectedIds(new Set());
+    toast.success(message);
+  }
+
+  async function onBulkArchive() {
+    const res = await fetch(`/api/v1/companies/bulk-archive`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids: Array.from(selectedIds) }),
+    });
+    const result = await res.json();
+    if (!res.ok) {
+      toast.error(result.error ?? "Could not archive the selected companies.");
+      return;
+    }
+    await afterBulkAction(`Archived ${result.affectedCount} compan${result.affectedCount === 1 ? "y" : "ies"}.`);
+  }
+
+  async function onBulkReassign(ownerId: string | null) {
+    const res = await fetch(`/api/v1/companies/bulk-reassign`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids: Array.from(selectedIds), ownerId }),
+    });
+    const result = await res.json();
+    if (!res.ok) {
+      toast.error(result.error ?? "Could not reassign the selected companies.");
+      return;
+    }
+    await afterBulkAction(`Reassigned ${result.affectedCount} compan${result.affectedCount === 1 ? "y" : "ies"}.`);
+  }
+
+  const items = data?.items ?? [];
+  const allSelected = items.length > 0 && items.every((c) => selectedIds.has(c.id));
 
   return (
     <div className="flex flex-col gap-6 p-6">
@@ -195,6 +268,33 @@ export default function CompaniesPage() {
             ))}
           </SelectContent>
         </Select>
+
+        {selectedIds.size > 0 && (
+          <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/50 px-3 py-1.5">
+            <span className="text-sm text-foreground">{selectedIds.size} selected</span>
+            <Button variant="outline" size="sm" onClick={onBulkArchive}>
+              Archive
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm">
+                  Reassign owner <ChevronDown className="size-3" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent>
+                <DropdownMenuItem onClick={() => onBulkReassign(null)}>Unassigned</DropdownMenuItem>
+                {members?.members.map((m) => (
+                  <DropdownMenuItem key={m.id} onClick={() => onBulkReassign(m.id)}>
+                    {m.user.name ?? m.user.email}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <Button variant="ghost" size="sm" onClick={() => setSelectedIds(new Set())}>
+              Clear
+            </Button>
+          </div>
+        )}
       </div>
 
       <div className="rounded-xl border border-border bg-card">
@@ -215,6 +315,9 @@ export default function CompaniesPage() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-10">
+                    <Checkbox checked={allSelected} onCheckedChange={(v) => toggleAll(items, Boolean(v))} />
+                  </TableHead>
                   <TableHead>Company</TableHead>
                   <TableHead>Industry</TableHead>
                   <TableHead>Contacts</TableHead>
@@ -226,6 +329,12 @@ export default function CompaniesPage() {
               <TableBody>
                 {data.items.map((company) => (
                   <TableRow key={company.id}>
+                    <TableCell>
+                      <Checkbox
+                        checked={selectedIds.has(company.id)}
+                        onCheckedChange={(v) => toggleOne(company.id, Boolean(v))}
+                      />
+                    </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
                         <Avatar size="sm">

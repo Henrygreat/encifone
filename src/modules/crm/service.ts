@@ -1019,3 +1019,45 @@ export async function bulkReassignLeadOwner(acting: ActiveMembership, ids: strin
 
   return { affectedCount: leads.length };
 }
+
+export async function bulkArchiveCompanies(acting: ActiveMembership, ids: string[]) {
+  requireCapability(acting, Capability.CRM_MANAGE);
+
+  const result = await prisma.company.updateMany({
+    where: { id: { in: ids }, organisationId: acting.organisationId },
+    data: { status: CompanyStatus.ARCHIVED, deletedAt: new Date() },
+  });
+
+  await writeAuditLog({
+    organisationId: acting.organisationId,
+    actorUserId: acting.userId,
+    action: "company.bulk_archived",
+    resourceType: "Company",
+    metadata: { requestedCount: ids.length, affectedCount: result.count },
+  });
+
+  return { affectedCount: result.count };
+}
+
+export async function bulkReassignCompanyOwner(acting: ActiveMembership, ids: string[], ownerId: string | null) {
+  requireCapability(acting, Capability.CRM_MANAGE);
+
+  if (ownerId) {
+    await assertMembershipInOrg(acting.organisationId, ownerId);
+  }
+
+  const result = await prisma.company.updateMany({
+    where: { id: { in: ids }, organisationId: acting.organisationId },
+    data: { ownerId },
+  });
+
+  await writeAuditLog({
+    organisationId: acting.organisationId,
+    actorUserId: acting.userId,
+    action: "company.bulk_reassigned",
+    resourceType: "Company",
+    metadata: { requestedCount: ids.length, affectedCount: result.count, ownerId },
+  });
+
+  return { affectedCount: result.count };
+}
