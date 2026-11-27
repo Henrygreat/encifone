@@ -6,12 +6,13 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ChevronDown, Download, Upload, Users } from "lucide-react";
+import { Bookmark, ChevronDown, Download, Upload, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -26,6 +27,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -79,6 +81,18 @@ interface ContactListResponse {
   totalPages: number;
 }
 
+interface SavedViewFilters {
+  search?: string;
+  status?: string;
+}
+
+interface SavedView {
+  id: string;
+  name: string;
+  ownerId: string | null;
+  filters: SavedViewFilters;
+}
+
 interface DuplicateGroup {
   matchedOn: "email";
   value: string;
@@ -128,6 +142,9 @@ export default function ContactsPage() {
   const [tagDialogOpen, setTagDialogOpen] = useState(false);
   const [bulkTag, setBulkTag] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [saveViewOpen, setSaveViewOpen] = useState(false);
+  const [saveViewName, setSaveViewName] = useState("");
+  const [saveViewShared, setSaveViewShared] = useState(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ["contacts", debouncedSearch, status, page],
@@ -168,6 +185,57 @@ export default function ContactsPage() {
       return res.json();
     },
   });
+
+  const { data: savedViews } = useQuery({
+    queryKey: ["saved-views", "CONTACT"],
+    queryFn: async (): Promise<{ views: SavedView[] }> => {
+      const res = await fetch(`/api/v1/saved-views?entityType=CONTACT`);
+      if (!res.ok) throw new Error("Could not load saved views.");
+      return res.json();
+    },
+  });
+
+  function applySavedView(view: SavedView) {
+    setPage(1);
+    setSearch(view.filters.search ?? "");
+    setStatus(view.filters.status ?? "ALL");
+    toast.success(`Applied "${view.name}".`);
+  }
+
+  async function onSaveView() {
+    if (!saveViewName.trim()) return;
+    const res = await fetch(`/api/v1/saved-views`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        entityType: "CONTACT",
+        name: saveViewName.trim(),
+        filters: { search: search || undefined, status: status === "ALL" ? undefined : status },
+        shared: saveViewShared,
+      }),
+    });
+    const result = await res.json();
+    if (!res.ok) {
+      toast.error(result.error ?? "Could not save this view.");
+      return;
+    }
+    await queryClient.invalidateQueries({ queryKey: ["saved-views", "CONTACT"] });
+    setSaveViewName("");
+    setSaveViewShared(false);
+    setSaveViewOpen(false);
+    toast.success(`Saved "${result.name}".`);
+  }
+
+  async function onDeleteView(view: SavedView) {
+    const res = await fetch(`/api/v1/saved-views/${view.id}`, { method: "DELETE" });
+    if (!res.ok) {
+      const result = await res.json();
+      toast.error(result.error ?? "Could not delete this view.");
+      return;
+    }
+    await queryClient.invalidateQueries({ queryKey: ["saved-views", "CONTACT"] });
+    toast.success(`Deleted "${view.name}".`);
+  }
 
   const {
     register,
@@ -333,6 +401,45 @@ export default function ContactsPage() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline">
+                <Bookmark className="size-4" /> Views <ChevronDown className="size-3" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent>
+              {savedViews?.views.length ? (
+                savedViews.views.map((view) => (
+                  <DropdownMenuItem
+                    key={view.id}
+                    onClick={() => applySavedView(view)}
+                    className="flex items-center justify-between gap-2"
+                  >
+                    <span>
+                      {view.name}
+                      {view.ownerId === null && (
+                        <span className="ml-1.5 text-xs text-muted-foreground">(shared)</span>
+                      )}
+                    </span>
+                    <button
+                      type="button"
+                      className="text-xs text-muted-foreground hover:text-destructive"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDeleteView(view);
+                      }}
+                    >
+                      Delete
+                    </button>
+                  </DropdownMenuItem>
+                ))
+              ) : (
+                <DropdownMenuItem disabled>No saved views yet</DropdownMenuItem>
+              )}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => setSaveViewOpen(true)}>Save current view…</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <Button variant="outline" onClick={() => setDuplicatesOpen(true)}>
             <Users className="size-4" /> Find duplicates
           </Button>
@@ -645,6 +752,37 @@ export default function ContactsPage() {
           <DialogFooter>
             <Button type="button" disabled={!bulkTag.trim()} onClick={onBulkTag}>
               Add tag
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={saveViewOpen} onOpenChange={setSaveViewOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Save current view</DialogTitle>
+            <DialogDescription>
+              Saves the current search and status filter — not the selected rows.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="viewName">View name</Label>
+              <Input id="viewName" value={saveViewName} onChange={(e) => setSaveViewName(e.target.value)} />
+            </div>
+            <div className="flex items-center justify-between">
+              <Label htmlFor="viewShared" className="flex flex-col gap-0.5">
+                <span>Share with the team</span>
+                <span className="text-xs font-normal text-muted-foreground">
+                  Off = visible only to you
+                </span>
+              </Label>
+              <Switch id="viewShared" checked={saveViewShared} onCheckedChange={setSaveViewShared} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button type="button" disabled={!saveViewName.trim()} onClick={onSaveView}>
+              Save view
             </Button>
           </DialogFooter>
         </DialogContent>
