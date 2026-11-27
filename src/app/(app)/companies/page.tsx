@@ -47,6 +47,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { BentoEmptyState } from "@/components/bento/bento-grid";
+import { PageHeader } from "@/components/ui/page-header";
 import { formatEnumLabel } from "@/lib/utils";
 import { useDebouncedValue } from "@/lib/use-debounced-value";
 import { COMPANY_STATUSES } from "@/modules/crm/constants";
@@ -264,14 +265,11 @@ export default function CompaniesPage() {
 
   return (
     <div className="flex flex-col gap-6 p-6">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">Companies</h1>
-          <p className="text-sm text-muted-foreground">
-            Organisations you do business with, and the contacts and deals tied to them.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
+      <PageHeader
+        title="Companies"
+        description="Organisations you do business with, and the contacts and deals tied to them."
+        actions={
+        <>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline">
@@ -342,8 +340,9 @@ export default function CompaniesPage() {
             </form>
           </DialogContent>
         </Dialog>
-        </div>
-      </div>
+        </>
+        }
+      />
 
       <div className="flex flex-wrap items-center gap-3">
         <Input

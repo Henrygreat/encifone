@@ -37,6 +37,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { BentoEmptyState } from "@/components/bento/bento-grid";
+import { PageHeader } from "@/components/ui/page-header";
 import { formatEnumLabel } from "@/lib/utils";
 import { CONTRACT_STATUS_BADGE_VARIANT } from "@/modules/contracts/constants";
 
@@ -184,13 +185,10 @@ export default function ContractsPage() {
 
   return (
     <div className="flex flex-col gap-6 p-6">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">Contracts</h1>
-          <p className="text-sm text-muted-foreground">
-            Draft, send for signature, and track contracts through to a signed agreement.
-          </p>
-        </div>
+      <PageHeader
+        title="Contracts"
+        description="Draft, send for signature, and track contracts through to a signed agreement."
+        actions={
         <Dialog open={createOpen} onOpenChange={setCreateOpen}>
           <DialogTrigger asChild>
             <Button style={{ background: "var(--module-sales)", color: "var(--module-on-accent)" }}>New contract</Button>
@@ -269,7 +267,8 @@ export default function ContractsPage() {
             </form>
           </DialogContent>
         </Dialog>
-      </div>
+        }
+      />
 
       <div className="rounded-xl border border-border bg-card">
         {isLoading ? (

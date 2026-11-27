@@ -40,6 +40,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { PageHeader } from "@/components/ui/page-header";
 import { cn } from "@/lib/utils";
 import { formatMoneyMinor } from "@/lib/money";
 
@@ -352,13 +353,10 @@ export default function DealsPage() {
 
   return (
     <div className="flex h-full flex-col gap-6 p-6">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-            {pipeline?.name ?? "Pipeline"}
-          </h1>
-          <p className="text-sm text-muted-foreground">Drag a deal to move it between stages.</p>
-        </div>
+      <PageHeader
+        title={pipeline?.name ?? "Pipeline"}
+        description="Drag a deal to move it between stages."
+        actions={
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
             <Button style={{ background: "var(--module-sales)", color: "var(--module-on-accent)" }} disabled={!pipeline}>
@@ -390,7 +388,8 @@ export default function DealsPage() {
             </form>
           </DialogContent>
         </Dialog>
-      </div>
+        }
+      />
 
       {isLoading ? (
         <div className="flex gap-4 overflow-x-auto">

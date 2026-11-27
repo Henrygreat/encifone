@@ -26,6 +26,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { PageHeader } from "@/components/ui/page-header";
 import {
   Select,
   SelectContent,
@@ -205,13 +206,10 @@ export default function MembersPage() {
 
   return (
     <div className="flex flex-col gap-6 p-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-            Organisation Settings
-          </h1>
-          <p className="text-sm text-muted-foreground">Members of your active organisation.</p>
-        </div>
+      <PageHeader
+        title="Organisation Settings"
+        description="Members of your active organisation."
+        actions={
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
             <Button>Invite member</Button>
@@ -263,7 +261,8 @@ export default function MembersPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
-      </div>
+        }
+      />
 
       <Card>
         <CardHeader>

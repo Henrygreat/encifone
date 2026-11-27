@@ -37,6 +37,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { BentoEmptyState } from "@/components/bento/bento-grid";
+import { PageHeader } from "@/components/ui/page-header";
 import { formatEnumLabel } from "@/lib/utils";
 import { formatMoneyMinor } from "@/lib/money";
 import { PROPOSAL_STATUSES, PROPOSAL_STATUS_BADGE_VARIANT } from "@/modules/proposals/constants";
@@ -187,13 +188,10 @@ export default function ProposalsPage() {
 
   return (
     <div className="flex flex-col gap-6 p-6">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">Proposals</h1>
-          <p className="text-sm text-muted-foreground">
-            Draft, send, and track client proposals — every edit after sending is a new version.
-          </p>
-        </div>
+      <PageHeader
+        title="Proposals"
+        description="Draft, send, and track client proposals — every edit after sending is a new version."
+        actions={
         <Dialog open={createOpen} onOpenChange={setCreateOpen}>
           <DialogTrigger asChild>
             <Button style={{ background: "var(--module-sales)", color: "var(--module-on-accent)" }}>New proposal</Button>
@@ -284,7 +282,8 @@ export default function ProposalsPage() {
             </form>
           </DialogContent>
         </Dialog>
-      </div>
+        }
+      />
 
       <div className="rounded-xl border border-border bg-card">
         {isLoading ? (

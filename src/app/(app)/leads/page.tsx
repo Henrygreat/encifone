@@ -46,6 +46,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { BentoEmptyState } from "@/components/bento/bento-grid";
+import { PageHeader } from "@/components/ui/page-header";
 import { formatEnumLabel } from "@/lib/utils";
 import { useDebouncedValue } from "@/lib/use-debounced-value";
 import { LEAD_STATUSES } from "@/modules/crm/constants";
@@ -317,14 +318,11 @@ export default function LeadsPage() {
 
   return (
     <div className="flex flex-col gap-6 p-6">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">Leads</h1>
-          <p className="text-sm text-muted-foreground">
-            Pre-qualification records — convert into a contact and company once qualified.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
+      <PageHeader
+        title="Leads"
+        description="Pre-qualification records — convert into a contact and company once qualified."
+        actions={
+        <>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline">
@@ -405,8 +403,9 @@ export default function LeadsPage() {
             </form>
           </DialogContent>
         </Dialog>
-        </div>
-      </div>
+        </>
+        }
+      />
 
       <div className="flex flex-wrap items-center gap-3">
         <Input
