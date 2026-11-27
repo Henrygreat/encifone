@@ -11,6 +11,7 @@ import {
   listOpportunities,
   moveOpportunity,
 } from "@/modules/sales/service";
+import { membershipIdFor } from "../helpers/membership";
 
 const createdOrgIds: string[] = [];
 const createdUserIds: string[] = [];
@@ -44,11 +45,13 @@ beforeAll(async () => {
     userId: orgAOwner.userId,
     organisationId: orgAOwner.organisationId,
     role: "ORGANISATION_OWNER",
+    membershipId: await membershipIdFor(orgAOwner.userId, orgAOwner.organisationId),
   };
   actingAsOrgBOwner = {
     userId: orgBOwner.userId,
     organisationId: orgBOwner.organisationId,
     role: "ORGANISATION_OWNER",
+    membershipId: await membershipIdFor(orgBOwner.userId, orgBOwner.organisationId),
   };
 });
 

@@ -10,6 +10,7 @@ import {
   listMembers,
   registerOwner,
 } from "@/modules/identity/service";
+import { membershipIdFor } from "../helpers/membership";
 
 /**
  * Exercises the actual enforcement points behind every tenant-scoped API
@@ -52,11 +53,13 @@ beforeAll(async () => {
     userId: orgAOwner.userId,
     organisationId: orgAOwner.organisationId,
     role: "ORGANISATION_OWNER",
+    membershipId: await membershipIdFor(orgAOwner.userId, orgAOwner.organisationId),
   };
   actingAsOrgBOwner = {
     userId: orgBOwner.userId,
     organisationId: orgBOwner.organisationId,
     role: "ORGANISATION_OWNER",
+    membershipId: await membershipIdFor(orgBOwner.userId, orgBOwner.organisationId),
   };
 });
 
@@ -98,6 +101,7 @@ describe("invite permission enforcement", () => {
       userId: orgAOwner.userId,
       organisationId: orgAOwner.organisationId,
       role: "TEAM_MEMBER",
+      membershipId: await membershipIdFor(orgAOwner.userId, orgAOwner.organisationId),
     };
 
     await expect(

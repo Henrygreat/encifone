@@ -296,3 +296,17 @@ export async function respondToPublicProposal(token: string, response: "ACCEPTED
 
   return updated;
 }
+
+/** Mirrors hasSignedContractForOpportunity (contracts/service.ts) and
+ * hasSucceededPaymentForOpportunity (payments/service.ts) — used by the
+ * onboarding module to auto-satisfy a PROPOSAL_ACCEPTANCE step without
+ * fabricating a link, checking the real record instead. */
+export async function hasAcceptedProposalForOpportunity(
+  organisationId: string,
+  opportunityId: string
+): Promise<boolean> {
+  const count = await prisma.proposal.count({
+    where: { organisationId, opportunityId, status: ProposalStatus.ACCEPTED, deletedAt: null },
+  });
+  return count > 0;
+}

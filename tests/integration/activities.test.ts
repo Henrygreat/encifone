@@ -6,6 +6,7 @@ import { registerOwner } from "@/modules/identity/service";
 import { createContact } from "@/modules/crm/service";
 import { NotFoundError } from "@/lib/api";
 import { completeActivity, createActivity, getActivity, listActivities } from "@/modules/activities/service";
+import { membershipIdFor } from "../helpers/membership";
 
 const createdOrgIds: string[] = [];
 const createdUserIds: string[] = [];
@@ -39,11 +40,13 @@ beforeAll(async () => {
     userId: orgAOwner.userId,
     organisationId: orgAOwner.organisationId,
     role: "ORGANISATION_OWNER",
+    membershipId: await membershipIdFor(orgAOwner.userId, orgAOwner.organisationId),
   };
   actingAsOrgBOwner = {
     userId: orgBOwner.userId,
     organisationId: orgBOwner.organisationId,
     role: "ORGANISATION_OWNER",
+    membershipId: await membershipIdFor(orgBOwner.userId, orgBOwner.organisationId),
   };
 });
 

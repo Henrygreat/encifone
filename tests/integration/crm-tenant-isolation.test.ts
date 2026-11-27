@@ -15,6 +15,7 @@ import {
   listContacts,
   updateContact,
 } from "@/modules/crm/service";
+import { membershipIdFor } from "../helpers/membership";
 
 /**
  * Mirrors tests/integration/tenant-isolation.test.ts for the new CRM
@@ -52,20 +53,25 @@ beforeAll(async () => {
   createdOrgIds.push(orgAOwner.organisationId, orgBOwner.organisationId);
   createdUserIds.push(orgAOwner.userId, orgBOwner.userId);
 
+  const orgAOwnerMembershipId = await membershipIdFor(orgAOwner.userId, orgAOwner.organisationId);
+
   actingAsOrgAOwner = {
     userId: orgAOwner.userId,
     organisationId: orgAOwner.organisationId,
     role: "ORGANISATION_OWNER",
+    membershipId: orgAOwnerMembershipId,
   };
   actingAsOrgBOwner = {
     userId: orgBOwner.userId,
     organisationId: orgBOwner.organisationId,
     role: "ORGANISATION_OWNER",
+    membershipId: await membershipIdFor(orgBOwner.userId, orgBOwner.organisationId),
   };
   actingAsOrgAClientUser = {
     userId: orgAOwner.userId,
     organisationId: orgAOwner.organisationId,
     role: "CLIENT_USER",
+    membershipId: orgAOwnerMembershipId,
   };
 });
 

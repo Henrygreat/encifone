@@ -16,6 +16,7 @@ import {
 } from "@/modules/crm/service";
 import { createOpportunity, ensureDefaultPipeline } from "@/modules/sales/service";
 import { createSavedView, deleteSavedView, listSavedViews, updateSavedView } from "@/modules/views/service";
+import { membershipIdFor } from "../helpers/membership";
 
 const createdOrgIds: string[] = [];
 const createdUserIds: string[] = [];
@@ -45,8 +46,18 @@ beforeAll(async () => {
   createdOrgIds.push(orgAOwner.organisationId, orgBOwner.organisationId);
   createdUserIds.push(orgAOwner.userId, orgBOwner.userId);
 
-  actingAsOrgAOwner = { userId: orgAOwner.userId, organisationId: orgAOwner.organisationId, role: "ORGANISATION_OWNER" };
-  actingAsOrgBOwner = { userId: orgBOwner.userId, organisationId: orgBOwner.organisationId, role: "ORGANISATION_OWNER" };
+  actingAsOrgAOwner = {
+    userId: orgAOwner.userId,
+    organisationId: orgAOwner.organisationId,
+    role: "ORGANISATION_OWNER",
+    membershipId: await membershipIdFor(orgAOwner.userId, orgAOwner.organisationId),
+  };
+  actingAsOrgBOwner = {
+    userId: orgBOwner.userId,
+    organisationId: orgBOwner.organisationId,
+    role: "ORGANISATION_OWNER",
+    membershipId: await membershipIdFor(orgBOwner.userId, orgBOwner.organisationId),
+  };
 });
 
 afterAll(async () => {

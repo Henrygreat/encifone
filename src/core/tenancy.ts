@@ -23,6 +23,11 @@ export interface ActiveMembership {
   userId: string;
   organisationId: string;
   role: MembershipRole;
+  // The Membership row's own id — distinct from userId. Needed wherever a
+  // service writes "who acted" into a field that's typed as a Membership
+  // relation (e.g. Client.ownerId, ClientOnboardingStep.completedByMembershipId),
+  // not a User relation.
+  membershipId: string;
 }
 
 /**
@@ -66,7 +71,12 @@ export async function requireActiveMembership(): Promise<ActiveMembership> {
     throw new NoActiveOrganisationError();
   }
 
-  return { userId: resolved.userId, organisationId: resolved.organisationId, role: resolved.role };
+  return {
+    userId: resolved.userId,
+    organisationId: resolved.organisationId,
+    role: resolved.role,
+    membershipId: resolved.id,
+  };
 }
 
 export async function listUserMemberships(userId: string) {

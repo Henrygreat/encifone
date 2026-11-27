@@ -26,6 +26,7 @@ import {
 } from "@/modules/ai/intelligence";
 import { createLead } from "@/modules/crm/service";
 import { createOpportunity, ensureDefaultPipeline, moveOpportunity } from "@/modules/sales/service";
+import { membershipIdFor } from "../helpers/membership";
 
 const createdOrgIds: string[] = [];
 const createdUserIds: string[] = [];
@@ -43,7 +44,12 @@ async function freshOrg(prefix: string) {
   });
   createdOrgIds.push(owner.organisationId);
   createdUserIds.push(owner.userId);
-  const acting: ActiveMembership = { userId: owner.userId, organisationId: owner.organisationId, role: "ORGANISATION_OWNER" };
+  const acting: ActiveMembership = {
+    userId: owner.userId,
+    organisationId: owner.organisationId,
+    role: "ORGANISATION_OWNER",
+    membershipId: await membershipIdFor(owner.userId, owner.organisationId),
+  };
   return acting;
 }
 

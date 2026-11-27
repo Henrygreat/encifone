@@ -5,6 +5,7 @@ import type { ActiveMembership } from "@/core/tenancy";
 import { registerOwner } from "@/modules/identity/service";
 import { createOpportunity, ensureDefaultPipeline, moveOpportunity } from "@/modules/sales/service";
 import { getSalesVelocityMetrics } from "@/modules/sales/analytics";
+import { membershipIdFor } from "../helpers/membership";
 
 const createdOrgIds: string[] = [];
 const createdUserIds: string[] = [];
@@ -29,7 +30,12 @@ beforeAll(async () => {
   });
   createdOrgIds.push(owner.organisationId);
   createdUserIds.push(owner.userId);
-  acting = { userId: owner.userId, organisationId: owner.organisationId, role: "ORGANISATION_OWNER" };
+  acting = {
+    userId: owner.userId,
+    organisationId: owner.organisationId,
+    role: "ORGANISATION_OWNER",
+    membershipId: await membershipIdFor(owner.userId, owner.organisationId),
+  };
 });
 
 afterAll(async () => {
@@ -119,6 +125,7 @@ describe("Sales velocity metrics", () => {
       userId: emptyOrgOwner.userId,
       organisationId: emptyOrgOwner.organisationId,
       role: "ORGANISATION_OWNER",
+      membershipId: await membershipIdFor(emptyOrgOwner.userId, emptyOrgOwner.organisationId),
     };
 
     const metrics = await getSalesVelocityMetrics(emptyActing);

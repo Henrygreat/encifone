@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { ensureClientFromWonOpportunity } from "@/modules/clients/service";
 import { hasSignedContractForOpportunity } from "@/modules/contracts/service";
 import { hasSucceededPaymentForOpportunity } from "@/modules/payments/service";
+import { maybeAutoStartOnboarding } from "@/modules/onboarding/service";
 
 /**
  * The single gated-conversion decision point for Phase 2.7
@@ -44,5 +45,12 @@ export async function attemptGatedConversion(
     if (!hasPayment) return null;
   }
 
-  return ensureClientFromWonOpportunity(tx, organisationId, opportunityId);
+  const client = await ensureClientFromWonOpportunity(tx, organisationId, opportunityId);
+
+  // Opt-in only (Organisation.autoStartOnboarding, default false) and a
+  // no-op if the org has no default OnboardingTemplate configured yet —
+  // never fabricates an onboarding the org hasn't actually set up.
+  await maybeAutoStartOnboarding(tx, organisationId, client.id);
+
+  return client;
 }

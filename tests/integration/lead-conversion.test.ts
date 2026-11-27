@@ -5,6 +5,7 @@ import type { ActiveMembership } from "@/core/tenancy";
 import { registerOwner } from "@/modules/identity/service";
 import { NotFoundError } from "@/lib/api";
 import { convertLead, createCompany, createLead, getLead, listLeads, updateLead } from "@/modules/crm/service";
+import { membershipIdFor } from "../helpers/membership";
 
 /**
  * Lead tenant isolation (mirrors tests/integration/crm-tenant-isolation.test.ts)
@@ -44,11 +45,13 @@ beforeAll(async () => {
     userId: orgAOwner.userId,
     organisationId: orgAOwner.organisationId,
     role: "ORGANISATION_OWNER",
+    membershipId: await membershipIdFor(orgAOwner.userId, orgAOwner.organisationId),
   };
   actingAsOrgBOwner = {
     userId: orgBOwner.userId,
     organisationId: orgBOwner.organisationId,
     role: "ORGANISATION_OWNER",
+    membershipId: await membershipIdFor(orgBOwner.userId, orgBOwner.organisationId),
   };
 });
 

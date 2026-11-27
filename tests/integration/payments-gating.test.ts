@@ -29,6 +29,7 @@ import { createOpportunity, ensureDefaultPipeline, moveOpportunity } from "@/mod
 import { attemptGatedConversion } from "@/modules/sales/conversion";
 import { createPayment, processStripeWebhook } from "@/modules/payments/service";
 import { createContract, sendContractForSignature, signContractPublicly } from "@/modules/contracts/service";
+import { membershipIdFor } from "../helpers/membership";
 
 const createdOrgIds: string[] = [];
 const createdUserIds: string[] = [];
@@ -46,7 +47,12 @@ async function freshOrg(prefix: string) {
   });
   createdOrgIds.push(owner.organisationId);
   createdUserIds.push(owner.userId);
-  const acting: ActiveMembership = { userId: owner.userId, organisationId: owner.organisationId, role: "ORGANISATION_OWNER" };
+  const acting: ActiveMembership = {
+    userId: owner.userId,
+    organisationId: owner.organisationId,
+    role: "ORGANISATION_OWNER",
+    membershipId: await membershipIdFor(owner.userId, owner.organisationId),
+  };
   return acting;
 }
 
