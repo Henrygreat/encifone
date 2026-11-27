@@ -41,12 +41,18 @@ const THEME_OPTIONS = [
  */
 export function ThemeSwitcher() {
   const { theme, setTheme } = useTheme();
+  const normalizeTheme = (value: string | undefined) => {
+    if (value === "dark") return "professional-dark";
+    if (value === "light") return "professional-light";
+    return value;
+  };
   // next-themes itself returns `theme: undefined` on the server and on
   // first client render before it reads localStorage — using that
   // directly (rather than a separate mounted-state effect) avoids both
   // the hydration mismatch and a synchronous setState-in-effect.
   const mounted = theme !== undefined;
-  const current = THEME_OPTIONS.find((o) => o.value === theme) ?? THEME_OPTIONS[0];
+  const normalizedTheme = normalizeTheme(theme);
+  const current = THEME_OPTIONS.find((o) => o.value === normalizedTheme) ?? THEME_OPTIONS[0];
   const CurrentIcon = current.icon;
 
   return (
@@ -61,7 +67,7 @@ export function ThemeSwitcher() {
         <DropdownMenuSeparator />
         {THEME_OPTIONS.map((option) => {
           const Icon = option.icon;
-          const selected = mounted && theme === option.value;
+          const selected = mounted && normalizedTheme === option.value;
           return (
             <DropdownMenuItem
               key={option.value}

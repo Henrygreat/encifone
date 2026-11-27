@@ -1,6 +1,8 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import { useMemo } from "react";
+import { useTheme } from "next-themes";
 import { SceneCanvas } from "./scene-canvas";
 
 const AiOrbScene = dynamic(() => import("./scenes/ai-orb-scene"), { ssr: false });
@@ -35,6 +37,23 @@ function StaticOrbFallback({ state }: { state: IntelligenceCoreState }) {
  * src/lib/ai-gateway), never a cosmetic default: the brief is explicit
  * that AI must never appear to be "working" when none is configured. */
 export function AiOrb({ className, state = "ready" }: { className?: string; state?: IntelligenceCoreState }) {
+  const { theme } = useTheme();
+  const prefersReducedMotion = useMemo(
+    () => typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+    []
+  );
+
+  const resolvedTheme = theme === "dark" ? "professional-dark" : theme === "light" ? "professional-light" : theme;
+  const useStatic = resolvedTheme === "professional-dark" || prefersReducedMotion;
+
+  if (useStatic) {
+    return (
+      <div className={className}>
+        <StaticOrbFallback state={state} />
+      </div>
+    );
+  }
+
   return (
     <SceneCanvas className={className} fallback={<StaticOrbFallback state={state} />} camera={{ position: [0, 0, 3], fov: 40 }}>
       <AiOrbScene state={state} />

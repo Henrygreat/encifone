@@ -16,7 +16,16 @@ export function Providers({ children }: { children: React.ReactNode }) {
         <ThemeProvider
           attribute="class"
           defaultTheme="aurora"
-          themes={["aurora", "professional-dark", "professional-light"]}
+          themes={["aurora", "professional-dark", "professional-light", "dark", "light"]}
+          value={{
+            aurora: "aurora",
+            "professional-dark": "professional-dark",
+            "professional-light": "professional-light",
+            dark: "professional-dark",
+            light: "professional-light",
+          }}
+          storageKey="encifone-theme"
+          enableSystem={false}
           disableTransitionOnChange
         >
           <TooltipProvider>

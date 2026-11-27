@@ -23,6 +23,7 @@ export function AppShell({
           Dark/Light (see .aurora-atmosphere in globals.css). Mounted once
           here, never per-page or per-card. */}
       <div className="aurora-atmosphere" aria-hidden="true" />
+        <div className="aurora-particles" aria-hidden="true" />
       <div className="relative z-10 flex h-full min-w-0 flex-col">
         <TopBar
           collapsed={collapsed}

@@ -124,9 +124,10 @@ export default async function DashboardPage() {
           icon={PiggyBank}
           accentModule="sales"
           colSpan={4}
-          children={<span className="sr-only" data-testid="kpi-pipeline-value" />}
           tooltip="Sum of valueMinor across every open opportunity."
-        />
+        >
+          <span className="sr-only" data-testid="kpi-pipeline-value" />
+        </MetricCard>
         <MetricCard
           key="weighted-forecast"
           label="Weighted forecast"
@@ -134,9 +135,10 @@ export default async function DashboardPage() {
           icon={TrendingUp}
           accentModule="sales"
           colSpan={4}
-          children={<span className="sr-only" data-testid="kpi-weighted-forecast" />}
           tooltip="Each open deal value multiplied by its probability."
-        />
+        >
+          <span className="sr-only" data-testid="kpi-weighted-forecast" />
+        </MetricCard>
         <MetricCard
           key="lead-conversion"
           label="Lead conversion"
@@ -144,9 +146,10 @@ export default async function DashboardPage() {
           icon={Award}
           accentModule="crm"
           colSpan={4}
-          children={<span className="sr-only" data-testid="kpi-lead-conversion" />}
           tooltip="Converted leads divided by total non-archived leads."
-        />
+        >
+          <span className="sr-only" data-testid="kpi-lead-conversion" />
+        </MetricCard>
 
         {/* Row 3 */}
         <BentoCard colSpan={6} accentModule="crm" className="min-h-[280px]" data-testid="operational-kpis-card">

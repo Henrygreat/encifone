@@ -50,7 +50,7 @@ function NavGroupSection({ group, iconOnly }: { group: (typeof NAV_GROUPS)[numbe
             className={cn(
               "flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
               iconOnly && "justify-center px-0",
-              isActive && "bg-sidebar-accent text-sidebar-accent-foreground"
+              isActive && "nav-item-active bg-sidebar-accent text-sidebar-accent-foreground"
             )}
           >
             <Icon className="size-4 shrink-0" aria-hidden="true" style={{ color: isActive ? accent : undefined }} />

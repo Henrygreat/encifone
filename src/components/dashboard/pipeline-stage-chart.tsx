@@ -16,6 +16,12 @@ export function PipelineStageChart({ data }: { data: { stageName: string; valueM
       <figcaption className="mb-2 text-xs text-muted-foreground">Pipeline value by stage</figcaption>
       <ResponsiveContainer width="100%" height={190}>
         <BarChart data={normalized} margin={{ left: 0, right: 14, top: 8, bottom: 8 }}>
+          <defs>
+            <linearGradient id="pipeline-stage-bar" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="var(--module-sales)" stopOpacity={0.95} />
+              <stop offset="100%" stopColor="var(--module-intelligence)" stopOpacity={0.72} />
+            </linearGradient>
+          </defs>
           <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
           <XAxis
             dataKey="stageName"
@@ -41,7 +47,7 @@ export function PipelineStageChart({ data }: { data: { stageName: string; valueM
         />
           <Bar
           dataKey="valueMinor"
-          fill="var(--module-sales)"
+          fill="url(#pipeline-stage-bar)"
           radius={[6, 6, 0, 0]}
           name="Pipeline value"
         >

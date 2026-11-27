@@ -27,6 +27,27 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       suppressHydrationWarning
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(() => {
+              try {
+                const nextKey = 'encifone-theme';
+                const legacyKey = 'theme';
+                const current = localStorage.getItem(nextKey);
+                if (!current) {
+                  const legacy = localStorage.getItem(legacyKey);
+                  if (legacy === 'dark') localStorage.setItem(nextKey, 'professional-dark');
+                  else if (legacy === 'light') localStorage.setItem(nextKey, 'professional-light');
+                  else if (legacy === 'aurora' || legacy === 'professional-dark' || legacy === 'professional-light') {
+                    localStorage.setItem(nextKey, legacy);
+                  }
+                }
+              } catch {}
+            })();`,
+          }}
+        />
+      </head>
       <body className="min-h-full flex flex-col">
         <Providers>{children}</Providers>
       </body>

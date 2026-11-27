@@ -106,6 +106,11 @@
   --module-documents: #6366f1;
   --module-client: #14b8a6;
   --module-alert: #fb7185;
+  --surface-card: #ffffff;
+  --surface-card-alt: #f8fafc;
+  --surface-ring: rgba(15, 23, 42, 0.1);
+  --surface-shadow: 0 10px 24px -14px rgba(11, 18, 32, 0.28);
+  --nav-active-glow: none;
 }
 
 /* ---- Professional Light (the original, unnamed :root light theme from
@@ -203,6 +208,11 @@
   --module-work: #60a5fa;
   --module-intelligence: #a78bfa;
   --module-admin: #94a3b8;
+  --surface-card: #101827;
+  --surface-card-alt: #16202e;
+  --surface-ring: rgba(255, 255, 255, 0.08);
+  --surface-shadow: 0 12px 30px -20px rgba(0, 0, 0, 0.55);
+  --nav-active-glow: none;
 }
 
 /* ---- Aurora — the new default theme (docs/AURORA_DESIGN_SYSTEM.md).
@@ -256,6 +266,11 @@
   --module-work: #3b82f6;
   --module-intelligence: #a78bfa;
   --module-admin: #94a3b8;
+    --surface-card: color-mix(in srgb, #111c2d 82%, transparent);
+    --surface-card-alt: color-mix(in srgb, #17263a 72%, transparent);
+    --surface-ring: rgba(34, 211, 238, 0.18);
+    --surface-shadow: 0 20px 42px -18px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(34, 211, 238, 0.05);
+    --nav-active-glow: 0 0 0 1px rgba(34, 211, 238, 0.32), 0 0 18px rgba(34, 211, 238, 0.22);
   /* Aurora-exclusive: the glow colours the ambient background/intelligence
      core animations cycle through. Unused by Professional Dark/Light. */
   --aurora-glow-1: #00e5a0;
@@ -271,6 +286,7 @@
     @apply bg-background text-foreground;
     overflow-x: clip;
     margin: 0;
+    background-image: linear-gradient(180deg, color-mix(in srgb, var(--background) 94%, transparent), var(--background));
   }
   html {
     @apply font-sans;
@@ -335,6 +351,54 @@
 }
 
 @layer utilities {
+  [data-slot="card"] {
+    background: var(--surface-card);
+    box-shadow: var(--surface-shadow);
+    border-color: var(--surface-ring);
+  }
+
+  .professional-dark [data-slot="card"] {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
+  .professional-light [data-slot="card"] {
+    background: #ffffff;
+    box-shadow: 0 14px 28px -20px rgba(15, 23, 42, 0.28);
+  }
+
+  .aurora [data-slot="card"] {
+    background: linear-gradient(
+      145deg,
+      color-mix(in srgb, var(--surface-card) 92%, transparent),
+      color-mix(in srgb, var(--surface-card-alt) 84%, transparent)
+    );
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    box-shadow: var(--surface-shadow);
+    border-color: color-mix(in srgb, var(--surface-ring) 80%, transparent);
+  }
+
+  .aurora [data-slot="card"]::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    border-radius: inherit;
+    border: 1px solid color-mix(in srgb, var(--module-intelligence) 14%, transparent);
+    opacity: 0.45;
+  }
+
+  .aurora .nav-item-active {
+    box-shadow: var(--nav-active-glow);
+    background: color-mix(in srgb, var(--sidebar-accent) 72%, transparent);
+  }
+
+  .professional-dark .nav-item-active,
+  .professional-light .nav-item-active {
+    box-shadow: none;
+  }
+
   /* Subtle glassmorphism — a translucent, blurred surface. Used sparingly
      (command palette, floating panels), never as the default card style —
      see docs/DESIGN_SYSTEM.md §1 on avoiding unnecessary glass effects. */
@@ -393,6 +457,34 @@
     pointer-events: none;
     opacity: 0;
     transition: opacity 400ms ease;
+  }
+
+  .aurora-particles {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 400ms ease;
+  }
+  .aurora .aurora-particles {
+    opacity: 0.45;
+    background-image:
+      radial-gradient(circle at 12% 18%, color-mix(in srgb, var(--aurora-glow-1) 60%, transparent) 0.7px, transparent 1px),
+      radial-gradient(circle at 74% 26%, color-mix(in srgb, var(--aurora-glow-2) 52%, transparent) 0.8px, transparent 1.2px),
+      radial-gradient(circle at 34% 78%, color-mix(in srgb, var(--aurora-glow-3) 50%, transparent) 0.75px, transparent 1.1px);
+    background-size: 180px 180px, 220px 220px, 200px 200px;
+    animation: aurora-particle-drift 32s linear infinite;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .aurora .aurora-particles {
+      animation: none;
+    }
+  }
+  @keyframes aurora-particle-drift {
+    0% { transform: translate3d(0, 0, 0); }
+    50% { transform: translate3d(-1.5%, 1.2%, 0); }
+    100% { transform: translate3d(1.2%, -1.1%, 0); }
   }
   .aurora-atmosphere::before,
   .aurora-atmosphere::after {
