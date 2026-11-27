@@ -199,15 +199,19 @@ export default function LeadsPage() {
     toast.success(`Deleted "${view.name}".`);
   }
 
-  const { data: scoreBreakdown, isLoading: scoreLoading } = useQuery({
+  const { data: qualification, isLoading: scoreLoading } = useQuery({
     enabled: Boolean(scoreLead),
-    queryKey: ["lead-score", scoreLead?.id],
-    queryFn: async (): Promise<{ score: number; factors: LeadScoreFactor[] }> => {
-      const res = await fetch(`/api/v1/leads/${scoreLead?.id}/score`);
+    queryKey: ["lead-qualification", scoreLead?.id],
+    queryFn: async (): Promise<{
+      deterministic: { score: number; factors: LeadScoreFactor[] };
+      ai: { narrative: string; provider: string; model: string } | null;
+    }> => {
+      const res = await fetch(`/api/v1/leads/${scoreLead?.id}/qualification`);
       if (!res.ok) throw new Error("Could not load the score breakdown.");
       return res.json();
     },
   });
+  const scoreBreakdown = qualification?.deterministic;
 
   const {
     register,
@@ -596,8 +600,9 @@ export default function LeadsPage() {
               {scoreLead ? ` — ${[scoreLead.firstName, scoreLead.lastName].filter(Boolean).join(" ") || scoreLead.email}` : ""}
             </DialogTitle>
             <DialogDescription>
-              Deterministic and explainable — no AI provider is configured for this organisation, so this
-              is a transparent, rule-based score, not a prediction.
+              The score itself is always deterministic and explainable — a transparent, rule-based
+              calculation, not a prediction. The qualification note below is AI-generated only when your
+              organisation has AI configured.
             </DialogDescription>
           </DialogHeader>
           {scoreLoading ? (
@@ -605,18 +610,33 @@ export default function LeadsPage() {
           ) : !scoreBreakdown || scoreBreakdown.factors.length === 0 ? (
             <p className="text-sm text-muted-foreground">No scoring factors apply yet.</p>
           ) : (
-            <ul className="flex flex-col gap-1.5">
-              {scoreBreakdown.factors.map((factor, i) => (
-                <li key={i} className="flex items-center justify-between text-sm">
-                  <span className="text-foreground">{factor.label}</span>
-                  <span className="text-muted-foreground">+{factor.points}</span>
+            <>
+              <ul className="flex flex-col gap-1.5">
+                {scoreBreakdown.factors.map((factor, i) => (
+                  <li key={i} className="flex items-center justify-between text-sm">
+                    <span className="text-foreground">{factor.label}</span>
+                    <span className="text-muted-foreground">+{factor.points}</span>
+                  </li>
+                ))}
+                <li className="flex items-center justify-between border-t border-border pt-1.5 text-sm font-medium">
+                  <span className="text-foreground">Total</span>
+                  <span className="text-foreground">{scoreBreakdown.score}</span>
                 </li>
-              ))}
-              <li className="flex items-center justify-between border-t border-border pt-1.5 text-sm font-medium">
-                <span className="text-foreground">Total</span>
-                <span className="text-foreground">{scoreBreakdown.score}</span>
-              </li>
-            </ul>
+              </ul>
+              {qualification?.ai ? (
+                <div className="mt-2 rounded-md border border-border bg-muted/30 p-3">
+                  <p className="mb-1 text-xs font-medium text-muted-foreground">
+                    AI qualification note ({qualification.ai.model})
+                  </p>
+                  <p className="text-sm text-foreground">{qualification.ai.narrative}</p>
+                </div>
+              ) : (
+                <p className="mt-2 text-xs text-muted-foreground">
+                  No AI qualification note — AI isn&apos;t configured for this organisation (Organisation
+                  Settings).
+                </p>
+              )}
+            </>
           )}
         </DialogContent>
       </Dialog>

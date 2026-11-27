@@ -78,6 +78,18 @@ export default function ClientWorkspacePage() {
     },
   });
 
+  const { data: summary, isLoading: summaryLoading } = useQuery({
+    queryKey: ["client-summary", clientId],
+    queryFn: async (): Promise<{
+      facts: Record<string, unknown>;
+      ai: { narrative: string; provider: string; model: string } | null;
+    }> => {
+      const res = await fetch(`/api/v1/clients/${clientId}/summary`);
+      if (!res.ok) throw new Error("Could not load the relationship summary.");
+      return res.json();
+    },
+  });
+
   async function onTransition(toStage: string) {
     setTransitioning(true);
     try {
@@ -172,6 +184,23 @@ export default function ClientWorkspacePage() {
       </div>
 
       <BentoGrid>
+        <BentoCard colSpan={12} accentModule="intelligence">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-foreground">Relationship summary</h2>
+            {!summary?.ai && <Badge variant="outline">AI not configured</Badge>}
+          </div>
+          {summaryLoading ? (
+            <Skeleton className="h-16 w-full" />
+          ) : summary?.ai ? (
+            <p className="text-sm text-foreground">{summary.ai.narrative}</p>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Enable AI in Organisation Settings to get a generated relationship summary here — until then,
+              the facts below (and every other section on this page) are the real, unembellished data.
+            </p>
+          )}
+        </BentoCard>
+
         <BentoCard colSpan={6} accentModule="crm">
           <h2 className="text-sm font-semibold text-foreground">Overview</h2>
           <dl className="grid grid-cols-2 gap-3 text-sm">
