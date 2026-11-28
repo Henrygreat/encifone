@@ -4,6 +4,8 @@ Operational companion to `docs/DEPLOYMENT.md` (architecture/reference) — this 
 
 ## 1. One-time setup (manual — do this once per environment, not per deploy)
 
+For a release containing communications changes, use the staging migration and provider checks in the [Phase 5.1 capstone](PHASE_5_1_CAPSTONE_REPORT.md#deployment). Confirm the configured public origin before installing chat or registering provider webhooks.
+
 ### 1.1 GitHub
 - [ ] Branch protection on `master`: require the CI workflow's required jobs to pass, disallow force-push, disallow deletion. Exact steps in `docs/DEPLOYMENT.md` §"GitHub branch protection (one-time manual configuration)" — `gh` CLI was not available in this environment to apply it directly; apply via the GitHub UI or `gh api` once available.
 - [ ] Confirm the `main` and `develop` branches (unused, superseded by the master-first workflow — `docs/DECISION_LOG.md`) have no deployment trigger pointed at them anywhere, in either GitHub or Coolify.

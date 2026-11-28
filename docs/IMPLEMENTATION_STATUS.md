@@ -456,3 +456,7 @@ Schema validation, client generation, migration status and drift checks, typeche
 The Phase 4.1 branch adds four reusable financial PDF templates, per-organisation billing and branding, issue-time snapshots, signed public invoice links, Stripe Connect checkout and refund reconciliation, and Resend invoice email. Existing dashboard, navigation layout, themes and global styles are preserved.
 
 Local validation covered 125 Vitest tests, four Chromium workflows, five additive migrations with no Prisma drift, typecheck, lint, and a production standalone build. Stripe test-mode merchant onboarding, real hosted checkout and refund delivery, and Resend delivery to a test mailbox remain staging release gates. See [Phase 4.1 implementation and release notes](PHASE_4_1_FINANCIAL_DOCUMENTS.md).
+
+## Phase 5 and 5.1 communications extension
+
+The Phase 5 branch delivered Universal Inbox, shared Resend mailboxes, Twilio SMS, website chat, staff appointments, in-app appointment reminders and human-reviewed AI suggestions. The Phase 5.1 branch adds the Communication Centre and multi-widget website chat management. Local validation passed 129 Vitest tests, six Chromium workflows, type checking, production build and migration drift checks. The [Phase 5.1 capstone and recovery checkpoint](PHASE_5_1_CAPSTONE_REPORT.md) tracks remaining implementation and release gates. The roadmap's original Phase 5 acceptance criteria still apply.

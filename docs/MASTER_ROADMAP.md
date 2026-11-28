@@ -95,6 +95,8 @@ Scope: Bento dashboard with real computed KPIs (not mocked), AI Command Centre a
 
 The owner-directed communications extension spans work listed in this Phase 6+ sequence. The extension is partially implemented. The [communications capstone](PHASE_5_CAPSTONE_REPORT.md) records its delivered scope, open milestones and validation. The original Phase 5 acceptance criteria above still apply.
 
+The [Phase 5.1 communications enhancement](PHASE_5_1_CAPSTONE_REPORT.md) adds an Integration Centre and extends website chat management. OAuth mailboxes, official WhatsApp, public booking, multi-provider SMS and full routing remain open under the owner-directed extension.
+
 ### Phase 6+ (indicative order, to be re-prioritised post-MVP feedback)
 6. Helpdesk depth (SLAs, routing, canned responses) + Universal Inbox (email channel first)
 7. Client Profitability Engine + Revenue Leakage Detector
