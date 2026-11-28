@@ -4,6 +4,7 @@ export interface CompletionRequest {
   system: string;
   prompt: string;
   maxTokens?: number;
+  redactProviderErrors?: boolean;
 }
 
 export interface AdapterCompletionResult {

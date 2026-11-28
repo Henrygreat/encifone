@@ -9,6 +9,7 @@ import { getInboxConversation, listInbox, replyToConversation, updateInboxConver
 import { membershipIdFor } from "../helpers/membership";
 import { configureMailbox, InvalidMailWebhook, listMailboxes, manageMailbox, receiveMailboxEvent } from "@/modules/inbox/email";
 import { cancelAppointment, listAppointments, saveAppointment, sendDueAppointmentReminders } from "@/modules/inbox/appointments";
+import { suggestCommunication } from "@/modules/inbox/assistant";
 
 const owners: ActiveMembership[] = [];
 async function owner(): Promise<ActiveMembership> {
@@ -122,6 +123,8 @@ it("keeps widget sessions, conversation records and internal notes isolated", as
   expect((await listInbox(other, { page: 1 })).items).toEqual([]);
   await expect(getInboxConversation(other, thread.id)).rejects.toThrow(/not found/);
   await expect(getInboxConversation({ ...staff, role: "CLIENT_USER" }, thread.id)).rejects.toThrow(/permission/);
+  await expect(suggestCommunication(other, thread.id, { task: "reply", tone: "Professional" })).rejects.toThrow(/not found/);
+  await expect(suggestCommunication(staff, thread.id, { task: "reply", tone: "Professional" })).resolves.toEqual({ state: "unavailable" });
   await expect(updateInboxConversation(staff, thread.id, { assigneeId: other.membershipId })).rejects.toThrow(/not found/);
   await updateInboxConversation(staff, thread.id, { assigneeId: staff.membershipId, priority: "URGENT", tags: ["enquiry"], markRead: true });
   expect((await listInbox(staff, { page: 1, tag: "enquiry", mine: true })).items[0].unread).toBe(0);

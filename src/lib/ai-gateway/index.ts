@@ -119,7 +119,7 @@ export async function completeForOrganisation(
       0,
       0,
       false,
-      error instanceof Error ? error.message : "Unknown error"
+      request.redactProviderErrors ? "Provider request failed." : error instanceof Error ? error.message : "Unknown error"
     );
     return null;
   }

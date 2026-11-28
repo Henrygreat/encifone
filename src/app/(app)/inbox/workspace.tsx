@@ -9,6 +9,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PageHeader } from "@/components/ui/page-header";
 import type { listInbox, getInboxConversation } from "@/modules/inbox/service";
+import { InboxAssistant } from "./assistant";
+import { formatFinanceMoney } from "@/lib/finance-money";
 
 type Inbox = Awaited<ReturnType<typeof listInbox>>;
 type Thread = Awaited<ReturnType<typeof getInboxConversation>>;
@@ -19,11 +21,11 @@ async function request<T>(path: string): Promise<T> {
   return response.json();
 }
 
-export function InboxWorkspace({ scope, canManage, canConfigure, members }: {
-  scope: string; canManage: boolean; canConfigure: boolean; members: { id: string; user: { name: string | null } }[];
+export function InboxWorkspace({ initial, scope, canManage, canConfigure, members }: {
+  initial?: string; scope: string; canManage: boolean; canConfigure: boolean; members: { id: string; user: { name: string | null } }[];
 }) {
   const cache = useQueryClient();
-  const [selected, setSelected] = useState("");
+  const [selected, setSelected] = useState(initial ?? "");
   const [before, setBefore] = useState("");
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
@@ -36,6 +38,7 @@ export function InboxWorkspace({ scope, canManage, canConfigure, members }: {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const draftKey = useRef<{ fingerprint: string; requestKey: string } | null>(null);
+  const composer = useRef<HTMLTextAreaElement>(null);
   const params = new URLSearchParams({ page: String(page), ...(search && { search }), ...(status && { status }),
     ...(priority && { priority }), ...(tag && { tag }), ...(mine && { mine: "true" }), ...(unread && { unread: "true" }), ...(snoozed && { showSnoozed: "true" }) });
   const list = useQuery({ queryKey: ["inbox", scope, params.toString()], queryFn: () => request<Inbox>(`/api/v1/inbox?${params}`), refetchInterval: 8000 });
@@ -146,9 +149,15 @@ export function InboxWorkspace({ scope, canManage, canConfigure, members }: {
                   {["OPEN", "PENDING"].includes(conversation.status) && ["CHAT", "EMAIL"].includes(conversation.channel) && <option value="OUTBOUND">Customer reply</option>}
                   <option value="NOTE">Internal note</option>
                 </select></Label>
-                <Label className="grid gap-1">Message<textarea required rows={4} maxLength={6000} name="body" className="w-full rounded-md border bg-background p-2 text-sm" /></Label>
+                <Label className="grid gap-1">Message<textarea ref={composer} required rows={4} maxLength={6000} name="body" className="w-full rounded-md border bg-background p-2 text-sm" /></Label>
                 <Button type="submit" disabled={busy}>Send message</Button>
               </form>}
+              {canManage && <InboxAssistant key={selected} conversation={selected} onDraft={(text) => {
+                if (composer.current && (!composer.current.value || window.confirm("Replace the current draft?"))) {
+                  composer.current.value = text;
+                  composer.current.focus();
+                }
+              }} />}
             </>}
             {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
           </CardContent>
@@ -159,9 +168,15 @@ export function InboxWorkspace({ scope, canManage, canConfigure, members }: {
             {!conversation && <p className="text-muted-foreground">Customer information appears here when a conversation is selected.</p>}
             {conversation && <>
               <p className="break-words">{conversation.customerName || "Anonymous visitor"}</p>
-              {conversation.customerEmail && <p className="break-all text-muted-foreground">{conversation.customerEmail} · visitor-provided</p>}
+              {conversation.customerEmail && <p className="break-all text-muted-foreground">{conversation.customerEmail} · unverified sender address</p>}
               {data.contact && <p>CRM contact · {data.contact.firstName} {data.contact.lastName}</p>}
               {data.company && <p className="break-words">{data.company.name}</p>}
+              {Boolean(data.opportunities.length) && <div><p className="font-medium">Open opportunities</p>{data.opportunities.map((item) => <p key={item.id}>{item.name}</p>)}</div>}
+              {Boolean(data.projects.length) && <div><p className="font-medium">Active projects</p>{data.projects.map((item) => <p key={item.id}>{item.name}</p>)}</div>}
+              {Boolean(data.tickets.length) && <div><p className="font-medium">Support tickets</p>{data.tickets.map((item) => <p key={item.id}>{item.reference} · {item.subject}</p>)}</div>}
+              {Boolean(data.invoices.length) && <div><p className="font-medium">Outstanding invoices</p>{data.invoices.map((item) => <p key={item.id}>
+                <Link href={`/invoices/${item.id}`} className="underline">Invoice {item.invoiceNumber}</Link> · {formatFinanceMoney(item.balanceDueMinor, item.currency)}
+              </p>)}</div>}
               {Boolean(data.previous.length) && <div><p className="font-medium">Previous conversations</p>{data.previous.map((item) =>
                 <Button key={item.id} variant="link" onClick={() => open(item.id)}>{item.subject} · {new Date(item.updatedAt).toLocaleDateString()}</Button>)}</div>}
               {canManage && <>
