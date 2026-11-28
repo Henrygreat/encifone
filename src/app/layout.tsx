@@ -16,8 +16,15 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: branding.productName,
-  description: `${branding.tagline} ${branding.secondaryTagline}`,
+  title: { default: branding.productName, template: `%s | ${branding.productName}` },
+  applicationName: branding.productName,
+  description: branding.description,
+  creator: branding.copyrightHolder,
+  icons: {
+    icon: branding.favicon,
+    ...(branding.appleIcon && { apple: branding.appleIcon }),
+  },
+  openGraph: { title: branding.productName, description: branding.description, siteName: branding.productName, type: "website" },
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

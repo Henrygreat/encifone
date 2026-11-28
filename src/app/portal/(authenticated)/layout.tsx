@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getPortalProfile, PortalUnauthenticatedError, requireActivePortalSession } from "@/modules/portal/auth";
 import { PortalShell } from "@/components/portal/portal-shell";
+import { resolvePortalBranding } from "@/config/branding";
 
 export default async function PortalAuthenticatedLayout({ children }: { children: React.ReactNode }) {
   let session;
@@ -16,7 +17,7 @@ export default async function PortalAuthenticatedLayout({ children }: { children
   const profile = await getPortalProfile(session);
 
   return (
-    <PortalShell organisationName={profile.organisation.name} clientName={profile.client.name}>
+    <PortalShell identity={resolvePortalBranding(profile.organisation.name, profile.organisation.branding)} clientName={profile.client.name}>
       {children}
     </PortalShell>
   );

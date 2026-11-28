@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { ProductSignature } from "@/components/product-brand";
 
 function AcceptInviteForm() {
   const router = useRouter();
@@ -90,6 +91,7 @@ export default function AcceptInvitePage() {
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <Card className="w-full max-w-md">
         <CardHeader>
+          <ProductSignature />
           <CardTitle>Join your organisation</CardTitle>
           <CardDescription>Set a password to activate your account.</CardDescription>
         </CardHeader>

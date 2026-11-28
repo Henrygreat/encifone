@@ -8,6 +8,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { signIn } from "next-auth/react";
 import { registerSchema, type RegisterInput } from "@/modules/identity/schemas";
 import { branding } from "@/config/branding";
+import { ProductSignature } from "@/components/product-brand";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -52,6 +53,7 @@ export default function RegisterPage() {
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <Card className="w-full max-w-md">
         <CardHeader>
+          <ProductSignature />
           <CardTitle>Create your organisation</CardTitle>
           <CardDescription>Start your {branding.productName} workspace in under a minute.</CardDescription>
         </CardHeader>

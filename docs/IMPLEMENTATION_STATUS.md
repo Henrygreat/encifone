@@ -460,3 +460,7 @@ Local validation covered 125 Vitest tests, four Chromium workflows, five additiv
 ## Phase 5 and 5.1 communications extension
 
 The Phase 5 branch delivered Universal Inbox, shared Resend mailboxes, Twilio SMS, website chat, staff appointments, in-app appointment reminders and human-reviewed AI suggestions. The Phase 5.1 branch adds the Communication Centre and multi-widget website chat management. Local validation passed 129 Vitest tests, six Chromium workflows, type checking, production build and migration drift checks. The [Phase 5.1 capstone and recovery checkpoint](PHASE_5_1_CAPSTONE_REPORT.md) tracks remaining implementation and release gates. The roadmap's original Phase 5 acceptance criteria still apply.
+
+## Configurable product branding
+
+The local `feature/kora-branding` branch extends the existing branding configuration to support the provisional Kora identity. EncifOne remains the default and no database migration is needed. See the [brand specification](BRAND_IDENTITY.md) and [rebranding report](KORA_REBRANDING_REPORT.md) for coverage and private preview instructions.

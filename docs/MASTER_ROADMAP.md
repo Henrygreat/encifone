@@ -97,6 +97,8 @@ The owner-directed communications extension spans work listed in this Phase 6+ s
 
 The [Phase 5.1 communications enhancement](PHASE_5_1_CAPSTONE_REPORT.md) adds an Integration Centre and extends website chat management. OAuth mailboxes, official WhatsApp, public booking, multi-provider SMS and full routing remain open under the owner-directed extension.
 
+**Product branding milestone.** The [provisional Kora identity](BRAND_IDENTITY.md) can be enabled for private review. Existing phase numbering and release gates still apply. Growth and future suite surfaces use the shared branding configuration.
+
 ### Phase 6+ (indicative order, to be re-prioritised post-MVP feedback)
 6. Helpdesk depth (SLAs, routing, canned responses) + Universal Inbox (email channel first)
 7. Client Profitability Engine + Revenue Leakage Detector

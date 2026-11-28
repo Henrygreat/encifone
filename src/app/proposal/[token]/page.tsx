@@ -80,7 +80,7 @@ export default function PublicProposalPage() {
   return (
     <div className="theme-client-portal min-h-screen bg-background px-4 py-12 text-foreground">
       <div className="mx-auto flex max-w-2xl flex-col gap-6">
-        <p className="text-center text-sm text-muted-foreground">{branding.productName}</p>
+        {branding.poweredBy && <p className="text-center text-sm text-muted-foreground">{branding.poweredBy}</p>}
 
         {isLoading ? (
           <div className="flex flex-col gap-4">

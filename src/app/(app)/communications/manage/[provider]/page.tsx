@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { MailboxSettings } from "../../mailboxes";
 import { SmsSettings } from "../../sms-numbers";
 import { CopyField } from "../../copy-field";
+import { branding } from "@/config/branding";
 
 export default async function ManageIntegration({ params, searchParams }: { params: Promise<{ provider: string }>; searchParams: Promise<{ result?: string; widget?: string }> }) {
   const acting = await requireActiveMembership();
@@ -41,7 +42,7 @@ export default async function ManageIntegration({ params, searchParams }: { para
   return (
     <div className="flex max-w-4xl flex-col gap-5 p-4 sm:p-6">
       <Link href="/communications" className="text-sm underline underline-offset-4">Communication Centre</Link>
-      <PageHeader title={provider === "resend" ? "Resend" : provider === "twilio" ? "Twilio SMS" : "EncifOne Website Chat"} />
+      <PageHeader title={provider === "resend" ? "Resend" : provider === "twilio" ? "Twilio SMS" : `${branding.productName} Website Chat`} />
       {provider === "website-chat" && <Card>
         <CardHeader><CardTitle>Website chat</CardTitle></CardHeader>
         <CardContent className="space-y-4">
@@ -55,7 +56,7 @@ export default async function ManageIntegration({ params, searchParams }: { para
           <form key={widget?.publicKey ?? "new"} action={save} className="grid gap-3 sm:grid-cols-2">
             {widget && <input type="hidden" name="key" value={widget.publicKey} />}
             <Label className="grid gap-1">Widget name<Input name="widgetName" defaultValue={widget?.widgetName ?? widget?.name} required maxLength={80} /></Label>
-            <Label className="grid gap-1">Brand name<Input name="name" defaultValue={widget?.name} required maxLength={80} /></Label>
+            <Label className="grid gap-1">Brand name<Input name="name" defaultValue={widget?.name ?? branding.productName} required maxLength={80} /></Label>
             <Label className="grid gap-1">Welcome message<Input name="welcome" defaultValue={widget?.welcome} required maxLength={300} /></Label>
             <Label className="grid gap-1">Accent colour<Input type="color" name="colour" defaultValue={widget?.colour ?? "#155e75"} /></Label>
             <Label className="grid gap-1">Position<select name="position" className="rounded-md border bg-background p-2" defaultValue={widget?.position ?? "right"}><option value="right">Right</option><option value="left">Left</option></select></Label>

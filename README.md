@@ -1,5 +1,7 @@
 # EncifOne
 
+The application supports a provisional Kora identity for private review. See [brand configuration and rollout](docs/BRAND_IDENTITY.md) for the opt-in build settings and approval process.
+
 **One platform. Intelligent business.**
 *Acquire. Manage. Deliver. Automate. Grow.*
 

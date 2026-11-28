@@ -35,7 +35,7 @@ export default function MarketingHome() {
         {branding.productName}
       </h1>
       <p className="max-w-xl text-lg font-medium text-foreground">{branding.tagline}</p>
-      <p className="max-w-xl text-lg text-muted-foreground">{branding.secondaryTagline}</p>
+      {(branding.attribution || branding.secondaryTagline) && <p className="max-w-xl text-lg text-muted-foreground">{branding.attribution ?? branding.secondaryTagline}</p>}
       <div className="flex gap-3">
         <Button asChild size="lg">
           <Link href="/register">Get started</Link>

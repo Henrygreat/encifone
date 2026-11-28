@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { BentoCard } from "@/components/bento/bento-grid";
 import { AiOrb } from "@/components/three/ai-orb";
 import type { IntelligenceCoreState } from "@/components/three/ai-orb";
+import { branding } from "@/config/branding";
 
 function greeting(hour: number) {
   if (hour < 5) return "Working late";
@@ -67,7 +68,7 @@ export function DashboardHero({
         <div className="relative size-28 sm:size-32 lg:size-[8.5rem]">
           <AiOrb className="size-full" state={aiState} />
         </div>
-        <p className="text-xs font-medium text-foreground">Intelligence Core</p>
+        <p className="text-xs font-medium text-foreground">{branding.intelligenceName}</p>
         <p className="text-[11px] text-muted-foreground">{aiStatusLabel}</p>
       </div>
     </BentoCard>

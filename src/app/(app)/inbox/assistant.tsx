@@ -1,5 +1,7 @@
 "use client";
 
+import { branding } from "@/config/branding";
+
 import { useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -38,7 +40,7 @@ export function InboxAssistant({ conversation, onDraft }: { conversation: string
   }
   const select = "rounded-md border bg-background p-2";
   return <details className="space-y-3 rounded-md border p-3">
-    <summary className="cursor-pointer">AI communication assistant</summary>
+    <summary className="cursor-pointer">{branding.assistantName}</summary>
     <p className="text-sm text-muted-foreground">The configured AI provider processes the conversation or draft you submit. Review all suggestions before sending.</p>
     <form onSubmit={request} className="grid gap-2 sm:grid-cols-2">
       <Label className="grid gap-1">Task<select className={select} value={task} onChange={(event) => setTask(event.target.value as keyof typeof actions)}>

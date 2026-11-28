@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { LayoutDashboard, FileCheck2, FolderOpen, FolderKanban, LifeBuoy, BookOpen, Boxes, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { branding } from "@/config/branding";
+import type { resolvePortalBranding } from "@/config/branding";
 
 const NAV = [
   { href: "/portal/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -26,11 +26,11 @@ const NAV = [
  * professional," not as a smaller copy of the internal tool.
  */
 export function PortalShell({
-  organisationName,
+  identity,
   clientName,
   children,
 }: {
-  organisationName: string;
+  identity: ReturnType<typeof resolvePortalBranding>;
   clientName: string;
   children: React.ReactNode;
 }) {
@@ -44,11 +44,18 @@ export function PortalShell({
 
   return (
     <div className="theme-client-portal flex min-h-screen flex-col bg-background text-foreground">
-      <header className="flex h-16 shrink-0 items-center justify-between border-b border-border px-6">
+      <header className="flex h-16 shrink-0 items-center justify-between border-b border-border px-6" style={{ borderBottomColor: identity.accentColor }}>
         <div className="flex items-center gap-6">
-          <div>
-            <p className="text-sm font-semibold">{organisationName}</p>
-            <p className="text-xs text-muted-foreground">{clientName}</p>
+          <div className="flex min-w-0 items-center gap-2">
+            {identity.logoUrl && (
+              // Tenant-hosted assets load directly from the browser without proxying.
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={identity.logoUrl} alt="" referrerPolicy="no-referrer" className="size-7 shrink-0 object-contain" />
+            )}
+            <div>
+              <p className="text-sm font-semibold">{identity.name}</p>
+              <p className="text-xs text-muted-foreground">{clientName}</p>
+            </div>
           </div>
           <nav className="hidden items-center gap-1 sm:flex">
             {NAV.map((item) => {
@@ -71,7 +78,7 @@ export function PortalShell({
           </nav>
         </div>
         <div className="flex items-center gap-3">
-          <p className="hidden text-xs text-muted-foreground sm:block">{branding.productName} Client Portal</p>
+          {identity.attribution && <p className="hidden text-xs text-muted-foreground sm:block">{identity.attribution}</p>}
           <Button variant="ghost" size="sm" onClick={onLogout}>
             <LogOut className="size-4" /> Sign out
           </Button>
@@ -101,6 +108,9 @@ export function PortalShell({
       <main className="flex-1 px-4 py-8 sm:px-8">
         <div className="mx-auto flex max-w-3xl flex-col gap-6">{children}</div>
       </main>
+      {identity.contactEmail && <footer className="px-4 pb-4 text-center text-xs">
+        <a className="underline" href={`mailto:${identity.contactEmail}`}>Contact {identity.name}</a>
+      </footer>}
     </div>
   );
 }

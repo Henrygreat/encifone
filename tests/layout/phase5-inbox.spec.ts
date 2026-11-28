@@ -23,7 +23,7 @@ test("website visitor and staff exchange messages without exposing internal note
   }
   await page.getByRole("link", { name: "Available integrations" }).click();
   await expect(page.getByRole("heading", { name: "Gmail", exact: true })).toHaveCount(0);
-  await page.getByRole("link", { name: "Manage EncifOne Website Chat" }).click();
+  await page.getByRole("link", { name: /^Manage .+ Website Chat$/ }).click();
   let snippet = "";
   const websiteServer = createServer((_request, response) => {
     response.setHeader("Content-Type", "text/html; charset=utf-8");

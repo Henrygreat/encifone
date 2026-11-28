@@ -8,6 +8,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Capability, roleHasCapability } from "@/core/permissions";
 import { requireActiveMembership } from "@/core/tenancy";
 import { getIntegrationOverview } from "@/modules/inbox/integration-overview";
+import { branding } from "@/config/branding";
 
 const categories = {
   email: { label: "Email", icon: Mail },
@@ -34,7 +35,7 @@ const forthcoming: [keyof typeof categories, string[], string][] = [
   ["email", ["Gmail", "Google Workspace", "Microsoft Outlook", "Microsoft 365", "SMTP/IMAP", "Zoho Mail"], "Mailbox synchronisation and replies."],
   ["messaging", ["WhatsApp Business Cloud API", "Vonage", "Telnyx", "Termii", "Africa’s Talking"], "Business messaging with provider-specific capabilities."],
   ["calendar", ["Google Calendar", "Microsoft Outlook Calendar"], "External calendars and appointment synchronisation."],
-  ["calendar", ["EncifOne Booking Pages"], "Public appointment scheduling."],
+  ["calendar", [`${branding.productName} Booking Pages`], "Public appointment scheduling."],
 ];
 const latest = (rows: { lastSyncAt: Date | null }[]) =>
   rows.reduce<Date | null>((date, item) => item.lastSyncAt && (!date || item.lastSyncAt > date) ? item.lastSyncAt : date, null);
@@ -50,7 +51,7 @@ export default async function Communications({ searchParams }: { searchParams: P
       accounts: mailboxes.map((row) => row.address), sync: latest(mailboxes) },
     { name: "Twilio SMS", category: "messaging", description: "Two-way SMS on an existing Twilio number.", href: "/communications/manage/twilio",
       state: numbers.some((row) => row.enabled) ? "Connected" : "Not connected", accounts: numbers.map((row) => row.number), sync: latest(numbers) },
-    { name: "EncifOne Website Chat", category: "chat", description: "Embed a chat launcher on your website.", href: "/communications/manage/website-chat",
+    { name: `${branding.productName} Website Chat`, category: "chat", description: "Embed a chat launcher on your website.", href: "/communications/manage/website-chat",
       state: widgets.some((row) => row.enabled && row.lastConnectedAt) ? "Connected" : widgets.some((row) => row.enabled) || !widgets.length ? "Configuration required" : "Disabled",
       accounts: widgets.map((row) => row.widgetName ?? row.name), sync: latest(widgets.map((row) => ({ lastSyncAt: row.lastConnectedAt }))) },
     { name: "Anthropic", category: "ai", description: "Draft replies and analyse conversations with the existing AI gateway.", href: "/members",

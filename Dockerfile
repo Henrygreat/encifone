@@ -21,6 +21,13 @@ FROM base AS builder
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
+ARG NEXT_PUBLIC_PRODUCT_NAME
+ARG NEXT_PUBLIC_PRODUCT_TAGLINE
+ARG NEXT_PUBLIC_PARENT_BRAND
+ARG NEXT_PUBLIC_AI_ASSISTANT_NAME
+ARG NEXT_PUBLIC_SUPPORT_EMAIL
+ARG NEXT_PUBLIC_MARKETING_WEBSITE
+ARG NEXT_PUBLIC_PLATFORM_ATTRIBUTION
 # Build-time env values are placeholders — next build only needs them to be
 # present and well-formed, not valid; no real secret, database, Redis, or
 # third-party API credential is ever read during a build (see
