@@ -8,6 +8,7 @@ import { findPublicWidget, runChatAction, saveWidget } from "@/modules/inbox/cha
 import { getInboxConversation, listInbox, replyToConversation, updateInboxConversation } from "@/modules/inbox/service";
 import { membershipIdFor } from "../helpers/membership";
 import { configureMailbox, InvalidMailWebhook, listMailboxes, manageMailbox, receiveMailboxEvent } from "@/modules/inbox/email";
+import { cancelAppointment, listAppointments, saveAppointment, sendDueAppointmentReminders } from "@/modules/inbox/appointments";
 
 const owners: ActiveMembership[] = [];
 async function owner(): Promise<ActiveMembership> {
@@ -25,6 +26,30 @@ afterAll(async () => {
     await prisma.organisation.delete({ where: { id: item.organisationId } });
     await prisma.user.delete({ where: { id: item.userId } });
   }
+});
+
+it("serialises conflicting staff bookings and delivers reminders only for active bookings", async () => {
+  const [staff, other] = await Promise.all([owner(), owner()]);
+  const start = new Date(Date.now() + 30 * 60_000);
+  const common = { staffId: staff.membershipId, title: "Appointment test", category: "Consultation",
+    startsAt: start.toISOString(), minutes: 30, bufferMinutes: 10, remindMinutes: 45 };
+  await expect(saveAppointment(other, common)).rejects.toThrow(/not found/);
+  const concurrent = await Promise.allSettled([saveAppointment(staff, common), saveAppointment(staff, common)]);
+  expect(concurrent.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+  const range = { from: new Date().toISOString(), to: new Date(Date.now() + 86_400_000).toISOString() };
+  const [appointment] = (await listAppointments(staff, range)).items;
+  expect((await listAppointments(other, range)).items).toEqual([]);
+  await expect(cancelAppointment(other, appointment.id)).rejects.toThrow(/not found/);
+  const duringBuffer = new Date(+start + 35 * 60_000).toISOString();
+  await expect(saveAppointment(staff, { ...common, startsAt: duringBuffer })).rejects.toHaveProperty("issues");
+  await cancelAppointment(staff, appointment.id);
+  const replacement = await saveAppointment(staff, common);
+  await Promise.all([sendDueAppointmentReminders(), sendDueAppointmentReminders()]);
+  expect(await prisma.notification.count({
+    where: { organisationId: staff.organisationId, recipientMembershipId: staff.membershipId, title: "Upcoming appointment" },
+  })).toBe(1);
+  expect((await prisma.appointment.findUniqueOrThrow({ where: { id: appointment.id } })).remindedAt).toBeNull();
+  expect((await prisma.appointment.findUniqueOrThrow({ where: { id: replacement.id } })).remindedAt).toBeInstanceOf(Date);
 });
 
 it("authenticates mail events, deduplicates messages and records confirmed sends using a mocked provider", async () => {

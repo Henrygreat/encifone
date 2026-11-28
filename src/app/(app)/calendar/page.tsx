@@ -1,43 +1,21 @@
-"use client";
-
-import { useQuery } from "@tanstack/react-query";
+import { Capability, roleHasCapability } from "@/core/permissions";
+import { requireActiveMembership } from "@/core/tenancy";
 import { PageHeader } from "@/components/ui/page-header";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { prisma } from "@/lib/prisma";
+import { AppointmentCalendar } from "./appointments";
+import { TaskDueDates } from "./task-due-dates";
 
-interface TaskRow {
-  id: string;
-  title: string;
-  dueDate: string | null;
-  status: string;
-}
-
-export default function CalendarPage() {
-  const { data } = useQuery({
-    queryKey: ["calendar-tasks"],
-    queryFn: async (): Promise<{ items: TaskRow[] }> => {
-      const res = await fetch("/api/v1/tasks?pageSize=100");
-      if (!res.ok) throw new Error("Could not load calendar tasks.");
-      return res.json();
-    },
-  });
-
-  const dueItems = (data?.items ?? []).filter((task) => task.dueDate);
-
-  return (
-    <div className="flex flex-col gap-6 p-6">
-      <PageHeader title="Calendar" description="Upcoming scheduled work from task due dates." />
-      <div className="grid gap-3">
-        {dueItems.map((task) => (
-          <Card key={task.id}>
-            <CardHeader>
-              <CardTitle>{task.title}</CardTitle>
-            </CardHeader>
-            <CardContent className="text-sm text-muted-foreground">
-              Due {task.dueDate ? new Date(task.dueDate).toLocaleDateString() : "N/A"} • {task.status.replaceAll("_", " ")}
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-    </div>
-  );
+export default async function CalendarPage({ searchParams }: { searchParams: Promise<{ conversation?: string }> }) {
+  const acting = await requireActiveMembership();
+  const canManage = roleHasCapability(acting.role, Capability.INBOX_MANAGE);
+  const conversation = (await searchParams).conversation;
+  const linked = canManage && typeof conversation === "string" && conversation ? await prisma.inboxConversation.findFirst({
+    where: { id: conversation, organisationId: acting.organisationId }, select: { id: true },
+  }) : null;
+  return <div className="space-y-5 p-4 sm:p-6">
+    <PageHeader title="Calendar" description="View appointments and upcoming task due dates." />
+    {roleHasCapability(acting.role, Capability.INBOX_VIEW) &&
+      <AppointmentCalendar scope={acting.organisationId} conversationId={linked?.id} canManage={canManage} />}
+    <TaskDueDates />
+  </div>;
 }

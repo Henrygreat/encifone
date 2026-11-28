@@ -59,3 +59,32 @@ test("website visitor and staff exchange messages without exposing internal note
   } finally { await customer.close(); }
   } finally { websiteServer.close(); }
 });
+
+test("staff schedule and cancel an appointment without replacing task due dates", async ({ page }) => {
+  const email = `calendar-${randomUUID()}@test.clientos.invalid`;
+  const password = "Local-inbox-test-pass1";
+  expect((await page.request.post("/api/v1/auth/register", { data: {
+    name: "Calendar operator", email, password, organisationName: email,
+  } })).status()).toBe(201);
+  await page.goto("/login");
+  await page.getByLabel("Email").fill(email);
+  await page.getByLabel("Password").fill(password);
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  await expect(page).toHaveURL(/\/dashboard/);
+  await page.goto("/calendar");
+  await expect(page.getByRole("heading", { name: "Task due dates" })).toBeVisible();
+  await page.getByText("New appointment", { exact: true }).click();
+  await page.getByLabel("Appointment title").fill("Calendar consultation");
+  await page.getByLabel("Appointment type").fill("Consultation");
+  await page.locator('select[name="staffId"]').selectOption({ label: "Calendar operator" });
+  const start = new Date(Date.now() + 3_600_000);
+  const localStart = new Date(+start - start.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
+  await page.getByLabel("Start time").fill(localStart);
+  await page.getByRole("button", { name: "Save appointment" }).click();
+  await expect(page.getByText("Calendar consultation", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Week", exact: true }).click();
+  await expect(page.getByText("Calendar consultation", { exact: true })).toBeVisible();
+  page.once("dialog", (dialog) => dialog.accept());
+  await page.getByRole("button", { name: "Cancel appointment", exact: true }).click();
+  await expect(page.getByText("Calendar consultation", { exact: true })).toHaveCount(0);
+});

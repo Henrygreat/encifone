@@ -77,6 +77,7 @@ model Organisation {
   inboxConversations InboxConversation[]
   chatWidgets ChatWidget[]
   inboxMailboxes InboxMailbox[]
+  appointments Appointment[]
   id              String   @id @default(cuid())
   name            String
   slug            String   @unique
@@ -160,6 +161,32 @@ model Organisation {
   subscriptionEvents  SubscriptionEvent[]
   retainers           Retainer[]
   retainerUsages      RetainerUsage[]
+}
+
+model Appointment {
+  id              String @id @default(cuid())
+  organisationId  String
+  organisation    Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  staffId         String
+  title           String
+  category        String
+  startsAt        DateTime
+  endsAt          DateTime
+  bufferedUntil   DateTime
+  bufferMinutes   Int
+  reminderAt      DateTime?
+  remindedAt      DateTime?
+  cancelledAt     DateTime?
+  conversationId  String?
+  contactId       String?
+  companyId       String?
+  leadId          String?
+  clientId        String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([organisationId, staffId, startsAt])
+  @@index([remindedAt, reminderAt])
 }
 
 enum InboxChannel {

@@ -7,6 +7,7 @@ import { branding } from "@/config/branding";
 import { executeWorkflowExecution } from "@/modules/workflows/engine";
 import { prisma } from "@/lib/prisma";
 import { runScheduledRecurringBilling } from "@/modules/finance/service";
+import { sendDueAppointmentReminders } from "@/modules/inbox/appointments";
 
 /**
  * Phase 1 worker process: proves the independent-worker architecture
@@ -22,6 +23,10 @@ const systemQueue = new Queue("system", { connection });
 const systemWorker = new Worker(
   "system",
   async (job) => {
+    if (job.name === "communications.appointment-reminders") {
+      await sendDueAppointmentReminders();
+      return;
+    }
     if (job.name === "finance.recurring-billing") {
       await runScheduledRecurringBilling();
       return;
@@ -70,8 +75,13 @@ async function scheduleBilling() {
       { every: 15 * 60 * 1000 },
       { name: "finance.recurring-billing", opts: { attempts: 3, backoff: { type: "exponential", delay: 5000 }, removeOnComplete: 100, removeOnFail: 100 } },
     );
+    await systemQueue.upsertJobScheduler(
+      "communications-appointment-reminders",
+      { every: 60_000 },
+      { name: "communications.appointment-reminders", opts: { attempts: 4, backoff: { type: "exponential", delay: 5000 }, removeOnComplete: 100, removeOnFail: 100 } },
+    );
   } catch (error) {
-    console.error("[worker] could not schedule recurring billing", error);
+    console.error("[worker] could not register recurring jobs", error);
     process.exitCode = 1;
     await systemWorker.close();
     await systemQueue.close();

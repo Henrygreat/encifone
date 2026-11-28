@@ -165,6 +165,7 @@ export function InboxWorkspace({ scope, canManage, canConfigure, members }: {
               {Boolean(data.previous.length) && <div><p className="font-medium">Previous conversations</p>{data.previous.map((item) =>
                 <Button key={item.id} variant="link" onClick={() => open(item.id)}>{item.subject} · {new Date(item.updatedAt).toLocaleDateString()}</Button>)}</div>}
               {canManage && <>
+                <Button asChild variant="outline" size="sm"><Link href={`/calendar?conversation=${conversation.id}`}>Create appointment</Link></Button>
                 <Label className="grid gap-1">Status<select disabled={busy} className={selectClass} value={conversation.status} onChange={(event) => void mutate("PATCH", { status: event.target.value })}>
                   {["OPEN", "PENDING", "RESOLVED", "ARCHIVED"].map((item) => <option key={item}>{item}</option>)}
                 </select></Label>
