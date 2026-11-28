@@ -13,9 +13,9 @@ export async function MailboxSettings({ result }: { result?: string }) {
     "use server";
     const acting = await requireActiveMembership();
     const input = mailboxSchema.safeParse({ address: form.get("address"), apiKey: form.get("apiKey"), webhook: form.get("webhook") });
-    if (!input.success) redirect("/communications?result=mail-invalid");
+    if (!input.success) redirect("/communications/manage/resend?result=mail-invalid");
     await configureMailbox(acting, input.data);
-    redirect("/communications?result=mail-saved");
+    redirect("/communications/manage/resend?result=mail-saved");
   }
   async function action(form: FormData) {
     "use server";
@@ -23,8 +23,8 @@ export async function MailboxSettings({ result }: { result?: string }) {
     const command = form.get("command");
     if (command !== "test" && command !== "enable" && command !== "disable" && command !== "disconnect") return;
     try { await manageMailbox(acting, String(form.get("id")), command); }
-    catch { redirect("/communications?result=mail-failed"); }
-    redirect("/communications?result=mail-updated");
+    catch { redirect("/communications/manage/resend?result=mail-failed"); }
+    redirect("/communications/manage/resend?result=mail-updated");
   }
   return <Card>
     <CardHeader><CardTitle>Shared Resend mailboxes</CardTitle></CardHeader>

@@ -13,6 +13,17 @@ test("website visitor and staff exchange messages without exposing internal note
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page).toHaveURL(/\/dashboard/);
   await page.goto("/communications");
+  await expect(page.getByRole("heading", { name: "Communication Centre" })).toBeVisible();
+  for (const [theme, width] of [["aurora", 1440], ["professional-dark", 768], ["professional-light", 390]] as const) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.evaluate((value) => localStorage.setItem("encifone-theme", value), theme);
+    await page.reload();
+    await expect(page.getByRole("heading", { name: "Communication Centre" })).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width + 1);
+  }
+  await page.getByRole("link", { name: "Available integrations" }).click();
+  await expect(page.getByRole("heading", { name: "Gmail", exact: true })).toHaveCount(0);
+  await page.getByRole("link", { name: "Manage EncifOne Website Chat" }).click();
   let snippet = "";
   const websiteServer = createServer((_request, response) => {
     response.setHeader("Content-Type", "text/html; charset=utf-8");

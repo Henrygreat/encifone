@@ -15,20 +15,20 @@ export async function SmsSettings({ result }: { result?: string }) {
     "use server";
     const acting = await requireActiveMembership();
     const input = smsConfiguration.safeParse({ number: form.get("number"), accountSid: form.get("account"), token: form.get("token") });
-    if (!input.success) redirect("/communications?result=sms-invalid");
+    if (!input.success) redirect("/communications/manage/twilio?result=sms-invalid");
     try {
       await saveSmsNumber(acting, input.data);
     } catch {
-      redirect("/communications?result=sms-invalid");
+      redirect("/communications/manage/twilio?result=sms-invalid");
     }
-    redirect("/communications?result=sms-connected");
+    redirect("/communications/manage/twilio?result=sms-connected");
   }
 
   async function disconnect(form: FormData) {
     "use server";
     const acting = await requireActiveMembership();
     await disconnectSmsNumber(acting, z.cuid().parse(form.get("id")));
-    redirect("/communications?result=sms-disconnected");
+    redirect("/communications/manage/twilio?result=sms-disconnected");
   }
 
   return (
