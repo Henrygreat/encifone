@@ -1,4 +1,5 @@
 "use client";
+import { useRouter } from "next/navigation";
 import type { getFinanceDocumentOptions } from "@/modules/finance/service";
 
 import { useRef, useState, type FormEvent } from "react";
@@ -120,6 +121,8 @@ export function FinanceDocumentForm({
         ? { title: text("title") }
         : {
             creationKey: creationKey.current,
+            purchaseOrderReference: text("purchaseOrderReference") || undefined,
+            customerReference: text("customerReference") || undefined,
             timeEntryId: text("timeEntryId") || undefined,
             serviceRequestId: text("serviceRequestId") || undefined,
           }),
@@ -174,6 +177,8 @@ export function FinanceDocumentForm({
           </Label>
           {kind === "invoices" && (
             <>
+              <Label className="grid gap-2">Purchase order reference (optional)<Input name="purchaseOrderReference" maxLength={100} /></Label>
+              <Label className="grid gap-2">Customer reference (optional)<Input name="customerReference" maxLength={100} /></Label>
               <Label className="grid gap-2">
                 Approved time entry ID (optional)
                 <Input name="timeEntryId" />
@@ -286,6 +291,7 @@ export function InvoicePaymentForm({
   currency: string;
   balance: number;
 }) {
+  const router = useRouter();
   const { submit, pending, error } = useFinanceMutation(
     `/api/v1/invoices/${id}/payments`,
     "invoices",
@@ -301,8 +307,10 @@ export function InvoicePaymentForm({
         externalReference: fields.get("reference"),
         method: fields.get("method"),
       })
-    )
+    ) {
       form.reset();
+      router.refresh();
+    }
   }
   return (
     <details className="mt-3">

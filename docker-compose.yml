@@ -87,6 +87,10 @@ services:
       # NEXTAUTH_URL: ${NEXTAUTH_URL}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      STRIPE_CONNECT_SECRET_KEY: ${STRIPE_CONNECT_SECRET_KEY:-}
+      STRIPE_CONNECT_WEBHOOK_SECRET: ${STRIPE_CONNECT_WEBHOOK_SECRET:-}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      FINANCE_EMAIL_FROM: ${FINANCE_EMAIL_FROM:-}
     # No host port published here, deliberately — see docs/ROLLBACK.md and
     # docs/DEPLOYMENT.md §5. Traefik reaches this container over Coolify's
     # own Docker network by container name/port, not via a published host

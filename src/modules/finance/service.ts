@@ -1,3 +1,4 @@
+import { financeTransaction, assertNoOnlineCheckout } from "./finance-transaction";
 import {
   BillingInterval,
   CreditNoteStatus,
@@ -20,7 +21,9 @@ import {
   endOfMonth,
   startOfMonth,
 } from "date-fns";
-import { formatFinanceMoney } from "@/lib/finance-money";
+import { organisationDefaultPaymentTerms, renderInvoiceDocument, snapshotInvoiceDocument } from "./document-settings";
+import { getInvoicePublicUrl } from "./invoice-sharing";
+import { invoiceCheckoutAvailable } from "./invoice-checkout";
 import { writeAuditLog } from "@/core/audit";
 import { Capability } from "@/core/permissions";
 import type { ActiveMembership } from "@/core/tenancy";
@@ -160,17 +163,6 @@ async function validateReferences(
   ]);
   if (results.includes(null))
     throw new NotFoundError("A related finance record was not found.");
-}
-
-// Use the same lock for all finance mutations that read and change balances or schedules.
-async function financeTransaction<T>(
-  organisationId: string,
-  operation: (tx: Prisma.TransactionClient) => Promise<T>,
-) {
-  return prisma.$transaction(async (tx) => {
-    await tx.$queryRaw`SELECT id FROM "Organisation" WHERE id = ${organisationId} FOR NO KEY UPDATE`;
-    return operation(tx);
-  });
 }
 
 function requireFinanceView(acting: ActiveMembership) {
@@ -344,7 +336,7 @@ export async function updateEstimate(
     throw new ValidationError(["Use the estimate lifecycle actions."]);
 
   await financeTransaction(acting.organisationId, async (tx) => {
-    await tx.estimate.update({
+    const estimate = await tx.estimate.update({
       where: {
         id,
         organisationId: acting.organisationId,
@@ -352,6 +344,9 @@ export async function updateEstimate(
       },
       data: { ...rest, sentAt: rest.status ? new Date() : undefined },
     });
+    if (rest.status === "SENT") {
+      await tx.estimate.update({ where: { id }, data: { documentSnapshot: await snapshotInvoiceDocument(tx, estimate) } });
+    }
 
     if (lines && lines.length > 0) {
       const latest = await tx.estimateVersion.findFirst({
@@ -705,9 +700,10 @@ export async function createInvoice(
 
   const totals = calcTotals(input.lines);
   const issueDate = input.issueDate ?? new Date();
+  const paymentTermsDays = input.paymentTermsDays ?? await organisationDefaultPaymentTerms(acting.organisationId);
   const dueDate =
     input.dueDate ??
-    new Date(issueDate.getTime() + input.paymentTermsDays * 86400000);
+    new Date(issueDate.getTime() + paymentTermsDays * 86400000);
 
   if (input.estimateId || input.subscriptionId || input.retainerId) {
     throw new ValidationError([
@@ -783,7 +779,9 @@ export async function createInvoice(
           currency,
           issueDate,
           dueDate,
-          paymentTermsDays: input.paymentTermsDays,
+          paymentTermsDays,
+          purchaseOrderReference: input.purchaseOrderReference,
+          customerReference: input.customerReference,
           subtotalMinor: totals.subtotalMinor,
           discountMinor: totals.discountMinor,
           taxMinor: totals.taxMinor,
@@ -926,15 +924,19 @@ export async function finaliseInvoice(acting: ActiveMembership, id: string) {
       _max: { invoiceNumber: true },
     });
     const now = new Date();
+    const snapshot = await snapshotInvoiceDocument(tx, existing);
+    const nextNumber = Math.max((highest._max.invoiceNumber ?? 0) + 1, snapshot.settings.sequenceStart ?? 1);
+    if (nextNumber > MAX_MINOR) throw new ValidationError(["Invoice numbering has reached its supported limit."]);
     const invoice = await tx.invoice.update({
       where,
       data: {
-        invoiceNumber: (highest._max.invoiceNumber ?? 0) + 1,
+        invoiceNumber: nextNumber,
         status:
           existing.balanceDueMinor === 0
             ? InvoiceStatus.PAID
             : InvoiceStatus.FINALISED,
         finalisedAt: now,
+        documentSnapshot: snapshot,
         paidAt: existing.balanceDueMinor === 0 ? now : null,
       },
     });
@@ -974,6 +976,22 @@ export async function archiveInvoice(acting: ActiveMembership, id: string) {
       tx,
     );
     return invoice;
+  });
+}
+
+export async function voidInvoice(acting: ActiveMembership, id: string) {
+  requireFinanceManage(acting);
+  return financeTransaction(acting.organisationId, async (tx) => {
+    const where = { id, organisationId: acting.organisationId };
+    const invoice = await tx.invoice.findFirst({ where, include: { _count: { select: { creditNotes: true, allocations: true } } } });
+    if (!invoice) throw new NotFoundError("Invoice not found.");
+    if (invoice.status === "VOID") return;
+    if (!["FINALISED", "OVERDUE"].includes(invoice.status) || invoice._count.creditNotes || invoice._count.allocations || invoice.amountPaidMinor) {
+      throw new ValidationError(["Only an issued invoice without payments or credit notes can be voided."]);
+    }
+    await assertNoOnlineCheckout(tx, id);
+    await tx.invoice.update({ where, data: { status: "VOID", publicLinkNonce: null, publicLinkExpiresAt: null } });
+    await writeAuditLog({ organisationId: acting.organisationId, actorUserId: acting.userId, action: "invoice.voided", resourceType: "Invoice", resourceId: id }, tx);
   });
 }
 
@@ -1030,6 +1048,7 @@ export async function recordInvoicePayment(
       ]);
     }
 
+    await assertNoOnlineCheckout(tx, invoice.id);
     const payment = await tx.payment.create({
       data: {
         organisationId: acting.organisationId,
@@ -1115,6 +1134,7 @@ export async function createCreditNote(
     )
       throw new Error("Credit amount cannot exceed remaining balance.");
 
+    await assertNoOnlineCheckout(tx, invoice.id);
     const count = await tx.creditNote.count({
       where: { organisationId: acting.organisationId },
     });
@@ -1678,7 +1698,7 @@ export async function listFinancePayments(acting: ActiveMembership, page: number
       take: 25,
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       select: {
-        id: true, createdAt: true, receivedAt: true, currency: true, amountMinor: true,
+        id: true, createdAt: true, receivedAt: true, currency: true, amountMinor: true, refundedMinor: true,
         method: true, status: true, externalReference: true,
         opportunity: { select: { name: true, organisationId: true } },
         allocations: {
@@ -1778,7 +1798,7 @@ export async function getFinancialMetrics(acting: ActiveMembership) {
   const netInvoiced = (invoice: { amountPaidMinor: number; balanceDueMinor: number }) => invoice.amountPaidMinor + invoice.balanceDueMinor;
   const totalInvoicedRevenueMinor = invoices.reduce((sum, invoice) => sum + netInvoiced(invoice), 0);
   const collectedRevenueMinor = payments.reduce(
-    (sum, item) => sum + item.amountMinor,
+    (sum, item) => sum + item.amountMinor - item.refundedMinor,
     0,
   );
   const outstandingReceivablesMinor = invoices.reduce(
@@ -2204,81 +2224,15 @@ async function renewDueRetainers(acting: BillingActor, runAt: Date) {
   return ids;
 }
 
-function escapePdfText(value: string) {
-  return value
-    .replace(/\\/g, "\\\\")
-    .replace(/\(/g, "\\(")
-    .replace(/\)/g, "\\)");
-}
-
-function buildSimplePdf(lines: string[]) {
-  const wrapped = lines.flatMap((line) => {
-    const safe = line.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^\x20-\x7e]/g, "?");
-    return safe.match(/.{1,86}/g) ?? [""];
-  });
-  const pages = Array.from({ length: Math.ceil(wrapped.length / 49) }, (_, index) => wrapped.slice(index * 49, index * 49 + 49));
-  const children = pages.map((_, index) => `${4 + index * 2} 0 R`).join(" ");
-  const objects = [
-    "<< /Type /Catalog /Pages 2 0 R >>",
-    `<< /Type /Pages /Kids [${children}] /Count ${pages.length} >>`,
-    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
-    ...pages.flatMap((page, index) => {
-      const text = page.map((line) => `(${escapePdfText(line)}) Tj`).join("\nT*\n");
-      const stream = `BT\n/F1 11 Tf\n48 744 Td\n14 TL\n${text}\nET`;
-      return [
-        `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents ${5 + index * 2} 0 R >>`,
-        `<< /Length ${Buffer.byteLength(stream)} >>\nstream\n${stream}\nendstream`,
-      ];
-    }),
-  ];
-  let body = "%PDF-1.4\n";
-  const offsets = objects.map((object, index) => {
-    const offset = Buffer.byteLength(body);
-    body += `${index + 1} 0 obj\n${object}\nendobj\n`;
-    return offset;
-  });
-  const xrefOffset = Buffer.byteLength(body);
-  body += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
-  for (const offset of offsets) body += `${String(offset).padStart(10, "0")} 00000 n \n`;
-  body += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
-  return Buffer.from(body);
-}
-
 export async function generateInvoicePdf(
   acting: ActiveMembership,
   invoiceId: string,
 ) {
   requireFinanceView(acting);
   const invoice = await getInvoice(acting, invoiceId);
-  return renderInvoicePdf(invoice);
-}
-
-function renderInvoicePdf(
-  invoice: Prisma.InvoiceGetPayload<{ select: typeof portalInvoice }>,
-) {
-  const money = (minor: number) => formatFinanceMoney(minor, invoice.currency, { locale: "en", currencyDisplay: "code" });
-  const lines = [
-    `Invoice #${invoice.invoiceNumber ?? "DRAFT"}`,
-    `Status: ${invoice.status}`,
-    `Currency: ${invoice.currency}`,
-    `Issue date: ${invoice.issueDate ? invoice.issueDate.toISOString().slice(0, 10) : "-"}`,
-    `Due date: ${invoice.dueDate ? invoice.dueDate.toISOString().slice(0, 10) : "-"}`,
-    "",
-    ...invoice.lines.map(
-      (line) =>
-        `${line.description} | qty ${line.quantity} | unit ${money(line.unitPriceMinor)} | total ${money(line.lineTotalMinor)}`,
-    ),
-    "",
-    `Subtotal: ${money(invoice.subtotalMinor)}`,
-    `Discount: ${money(invoice.discountMinor)}`,
-    `Tax: ${money(invoice.taxMinor)}`,
-    `Total: ${money(invoice.totalMinor)}`,
-    `Paid: ${money(invoice.amountPaidMinor)}`,
-    `Credits applied: ${money((invoice.totalMinor - invoice.amountPaidMinor - invoice.balanceDueMinor))}`,
-    `Balance due: ${money(invoice.balanceDueMinor)}`,
-  ];
-
-  return buildSimplePdf(lines);
+  const url = getInvoicePublicUrl(invoice);
+  const pay = Boolean(url && invoice.balanceDueMinor > 0 && await invoiceCheckoutAvailable(acting.organisationId));
+  return renderInvoiceDocument(invoice, invoice, url, pay);
 }
 
 const portalLine = {
@@ -2380,10 +2334,10 @@ export async function generatePortalInvoicePdf(
       clientId: session.clientId,
       status: { in: issuedInvoiceStatuses },
     },
-    select: portalInvoice,
+    select: { ...portalInvoice, organisationId: true, clientId: true, companyId: true, contactId: true, documentSnapshot: true, paymentTermsDays: true, purchaseOrderReference: true, customerReference: true },
   });
   if (!invoice) throw new NotFoundError("Invoice not found.");
-  return renderInvoicePdf(invoice);
+  return renderInvoiceDocument(invoice, invoice);
 }
 
 export async function getPortalSubscriptions(

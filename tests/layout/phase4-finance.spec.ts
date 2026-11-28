@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { PNG } from "pngjs";
 import { expect, test, type Page } from "@playwright/test";
 
 async function signInOwner(page: Page) {
@@ -128,5 +129,54 @@ test("a portal client accepts a shared estimate and downloads only its own issue
     expect((await portal.request.get(`/api/portal/finance/invoices/${privateInvoiceId}/pdf`)).status()).toBe(404);
   } finally {
     await portal.close();
+  }
+});
+
+test("an administrator previews branded documents and can revoke a public invoice", async ({ page, browser }) => {
+  await signInOwner(page);
+  await page.goto("/finance-settings");
+  await expect(page.getByRole("heading", { name: "Finance & Billing" })).toBeVisible();
+  await page.locator('select[name="template"]').selectOption("corporate");
+  await page.getByLabel("Legal business name").fill("Verified example business");
+  await page.getByLabel("Invoice prefix").fill("BRAND-");
+  const logo = new PNG({ width: 1, height: 1 });
+  logo.data.set([21, 94, 117, 255]);
+  await page.getByLabel("Company logo").setInputFiles({
+    name: "test-logo.png", mimeType: "image/png",
+    buffer: PNG.sync.write(logo),
+  });
+  await page.getByRole("button", { name: "Save document settings" }).click();
+  await expect(page.getByText("Document settings saved.")).toBeVisible();
+  const sample = await page.request.get("/api/v1/finance/document-sample");
+  expect(sample.status()).toBe(200);
+  const sampleBytes = await sample.body();
+  expect(sampleBytes.subarray(0, 5).toString()).toBe("%PDF-");
+  expect(sampleBytes.toString("latin1")).toContain("/Subtype /Image");
+  const created = await page.request.post("/api/v1/invoices", { data: {
+    creationKey: randomUUID(), lines: [{ description: "Branded consulting", unitPriceMinor: 2000 }],
+  } });
+  expect(created.status()).toBe(201);
+  const { id } = await created.json();
+  expect((await page.request.post(`/api/v1/invoices/${id}/finalise`)).ok()).toBe(true);
+  await page.goto(`/invoices/${id}`);
+  await expect(page.getByTitle("Invoice PDF preview")).toBeVisible();
+  await page.getByRole("button", { name: "Generate link" }).click();
+  const url = await page.getByLabel("Share this secure link").inputValue();
+  const anonymous = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  try {
+    const customer = await anonymous.newPage();
+    await customer.goto(url);
+    await expect(customer.getByText("Invoice BRAND-1", { exact: true })).toBeVisible();
+    await expect(customer.getByText("Verified example business")).toBeVisible();
+    await expect(customer.getByText("Branded consulting")).toBeVisible();
+    expect(await customer.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(391);
+    const pdf = await anonymous.request.get(`${url}/pdf`);
+    expect(pdf.headers()["content-type"]).toBe("application/pdf");
+    expect((await pdf.body()).toString("latin1")).toContain("/Subtype /Link");
+    await page.getByRole("button", { name: "Revoke link" }).click();
+    await expect(page.getByRole("button", { name: "Generate link", exact: true })).toBeVisible();
+    expect((await anonymous.request.get(`${url}/pdf`)).status()).toBe(404);
+  } finally {
+    await anonymous.close();
   }
 });

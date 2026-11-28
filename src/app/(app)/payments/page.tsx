@@ -27,6 +27,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
             <CardContent className="space-y-2 text-sm">
               <p>{payment.status.toLowerCase()} · {payment.method.replaceAll("_", " ").toLowerCase()} · {(payment.receivedAt ?? payment.createdAt).toISOString().slice(0, 10)}</p>
               {payment.externalReference && <p className="break-all">Reference {payment.externalReference}</p>}
+              {payment.refundedMinor > 0 && <p>{formatFinanceMoney(payment.refundedMinor, payment.currency)} refunded</p>}
               {payment.opportunity && <p className="break-words">CRM deposit · {payment.opportunity.name}</p>}
               {payment.allocations.map(({ id, invoice, amountMinor }) => (
                 <p key={id}>Invoice {invoice.invoiceNumber} · {formatFinanceMoney(amountMinor, payment.currency)} allocated</p>

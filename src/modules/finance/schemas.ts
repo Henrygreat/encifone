@@ -89,13 +89,15 @@ export const createInvoiceSchema = z.object({
     .optional(),
   issueDate: z.coerce.date().optional(),
   dueDate: z.coerce.date().optional(),
+  purchaseOrderReference: z.string().trim().max(100).optional(),
+  customerReference: z.string().trim().max(100).optional(),
   paymentTermsDays: z
     .number()
     .int()
     .min(0)
     .max(2_147_483_647)
     .max(365)
-    .default(30),
+    .optional(),
   lines: z.array(financeLineSchema).min(1).max(500),
   internalNotes: z.string().trim().max(8000).optional(),
 });

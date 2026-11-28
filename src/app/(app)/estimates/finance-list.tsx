@@ -49,6 +49,7 @@ export function FinanceList({ options }: { options: Awaited<ReturnType<typeof ge
                   <FinanceAction endpoint={`/api/v1/estimates/${estimate.id}/duplicate`} label="Duplicate" queryKey="estimates" />
                 </div>
               )}
+              <a className="mt-2 inline-block text-foreground underline" href={`/api/v1/finance/documents/estimate/${estimate.id}`}>Download estimate PDF</a>
             </CardContent>
           </Card>
         ))}

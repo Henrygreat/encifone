@@ -8,7 +8,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     const session = await requireActivePortalSession();
     const { id } = await params;
     const pdf = await generatePortalInvoicePdf(session, id);
-    return new NextResponse(pdf, {
+    return new NextResponse(new Uint8Array(pdf), {
       headers: {
         "Content-Type": "application/pdf",
         "Content-Disposition": `attachment; filename=invoice-${id}.pdf`,

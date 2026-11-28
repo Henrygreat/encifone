@@ -83,6 +83,10 @@ Execution note (2026-11-27). Phase 4 reuses the project, request and time-entry 
 
 Navigation follow-up (2026-11-28). The feature branch enables all eight finance destinations, including a new Payments ledger backed by existing payment and invoice allocation records. Catalogue prices and tenant-scoped client and project choices are available in estimate and invoice drafts. The dashboard shows live base-currency MRR, collections and receivables. Production activation follows the owner-managed merge and deployment.
 
+### Phase 4.1 — Branded financial documents and customer payments
+
+Scope covers financial PDF templates and issue-time snapshots, per-organisation billing settings, secure invoice links, merchant onboarding, hosted card checkout, refund reconciliation, and invoice email. Local verification and provider-backed release gates are recorded in the [Phase 4.1 implementation notes](PHASE_4_1_FINANCIAL_DOCUMENTS.md).
+
 ### Phase 5 — Dashboard + AI Command Centre (read-only) + Audit
 Scope: Bento dashboard with real computed KPIs (not mocked), AI Command Centre answering at minimum "summarise this client relationship" and 2–3 other read-only queries via the typed tool registry, full audit trail across the slice.
 **Acceptance criteria:** steps 18–20 work end-to-end; every KPI on the dashboard has a documented calculation (linked from the UI) and a working drill-down; the AI summary cites its sources; the audit log contains an entry for every state-changing step in the full 20-step journey when run end-to-end.

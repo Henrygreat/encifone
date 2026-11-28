@@ -450,3 +450,9 @@ The feature branch, local `master` and live GitHub `master` were at `8bcbcc9` at
 The feature branch now links all eight pages. Payments reads the organisation ledger and invoice allocations with finance access. The CRM payment-list endpoint continues listing Stripe deposits under CRM permissions and excludes manual finance records. Estimate and invoice forms use tenant-scoped client, project and service catalogue choices. The dashboard reports MRR, recorded collections and outstanding receivables from database records in the organisation’s base currency.
 
 Schema validation, client generation, migration status and drift checks, typecheck, lint, all 116 Vitest tests and the production build passed. Three authenticated Chromium workflows verified navigation to every finance page, catalogue pricing, a non-zero database-backed MRR, the staff invoice and payment ledger workflow, and client portal acceptance and PDF isolation. No new environment variables or migrations were added in this follow-up. See the [deployment instructions](PHASE_4_CAPSTONE_REPORT.md#navigation-follow-up-and-deployment) for the manual release sequence.
+
+### Phase 4.1 branded documents and integrated payments (2026-11-28)
+
+The Phase 4.1 branch adds four reusable financial PDF templates, per-organisation billing and branding, issue-time snapshots, signed public invoice links, Stripe Connect checkout and refund reconciliation, and Resend invoice email. Existing dashboard, navigation layout, themes and global styles are preserved.
+
+Local validation covered 125 Vitest tests, four Chromium workflows, five additive migrations with no Prisma drift, typecheck, lint, and a production standalone build. Stripe test-mode merchant onboarding, real hosted checkout and refund delivery, and Resend delivery to a test mailbox remain staging release gates. See [Phase 4.1 implementation and release notes](PHASE_4_1_FINANCIAL_DOCUMENTS.md).

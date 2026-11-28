@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import type { getFinanceDocumentOptions } from "@/modules/finance/service";
 
 import { formatFinanceMoney as money } from "@/lib/finance-money";
@@ -48,6 +49,7 @@ export function FinanceList({ options }: { options: Awaited<ReturnType<typeof ge
                   <FinanceAction endpoint={`/api/v1/invoices/${invoice.id}/finalise`} label="Finalise" queryKey="invoices" />
                   <FinanceAction endpoint={`/api/v1/invoices/${invoice.id}`} method="DELETE" label="Archive" queryKey="invoices" />
                 </>}
+                <Link className="text-foreground underline" href={`/invoices/${invoice.id}`}>View invoice</Link>
                 <a className="text-foreground underline" href={`/api/v1/invoices/${invoice.id}/pdf`}>Download PDF</a>
               </div>
               {canManage && ["FINALISED", "PARTIALLY_PAID", "OVERDUE"].includes(invoice.status) && invoice.balanceDueMinor > 0 && (

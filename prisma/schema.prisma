@@ -79,6 +79,8 @@ model Organisation {
   slug            String   @unique
   // Logo/colour-token overrides — see docs/DESIGN_SYSTEM.md §6 (white-label & theming).
   branding        Json?
+  financialDocumentSettings Json?
+  stripeInvoiceAccountId String? @unique
   defaultCurrency String   @default("GBP")
   timezone        String   @default("Europe/London")
   // Lead-to-client conversion gating (docs/MASTER_ROADMAP.md 2.7). Both
@@ -1209,6 +1211,7 @@ model Payment {
   // intent for the same conceptual payment can never double-count.
   providerPaymentId     String          @unique
   amountMinor           Int
+  refundedMinor         Int             @default(0)
   currency              String          @default("GBP")
   method                PaymentMethod   @default(STRIPE)
   externalReference     String?
@@ -1224,6 +1227,7 @@ model Payment {
   company      Company?     @relation(fields: [companyId], references: [id], onDelete: SetNull)
   contact      Contact?     @relation(fields: [contactId], references: [id], onDelete: SetNull)
   allocations  InvoicePaymentAllocation[]
+  invoiceRefunds InvoicePaymentRefund[]
 
   @@index([organisationId, status])
   @@index([organisationId, opportunityId])
@@ -1238,7 +1242,18 @@ enum EstimateStatus {
   ARCHIVED
 }
 
+model InvoicePaymentRefund {
+  providerRefundId String   @id
+  paymentId        String
+  amountMinor      Int
+  createdAt        DateTime @default(now())
+  payment          Payment  @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+  @@index([paymentId])
+}
+
 model Estimate {
+  documentSnapshot      Json?
   id                    String         @id @default(cuid())
   organisationId        String
   clientId              String?
@@ -1326,6 +1341,11 @@ model Invoice {
   timeEntryId           String?
   serviceRequestId      String?
   creationKey           String?
+  documentSnapshot      Json?
+  purchaseOrderReference String?
+  customerReference      String?
+  publicLinkNonce       String?      @unique
+  publicLinkExpiresAt   DateTime?
   subscriptionId        String?
   retainerId            String?
   clientId              String?
@@ -1358,6 +1378,7 @@ model Invoice {
   lines        InvoiceLine[]
   allocations  InvoicePaymentAllocation[]
   creditNotes  CreditNote[]
+  onlineAttempts InvoiceCheckoutAttempt[]
 
   @@unique([organisationId, invoiceNumber])
   @@unique([organisationId, timeEntryId])
@@ -1365,6 +1386,21 @@ model Invoice {
   @@unique([organisationId, creationKey])
   @@index([organisationId, status])
   @@index([organisationId, clientId])
+}
+
+model InvoiceCheckoutAttempt {
+  id                  String    @id @default(cuid())
+  invoiceId           String
+  accountId           String
+  providerSessionId   String?   @unique
+  amountMinor         Int
+  currency            String
+  expiresAt           DateTime
+  closedAt            DateTime?
+  createdAt           DateTime  @default(now())
+  invoice             Invoice   @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([invoiceId, closedAt])
 }
 
 model InvoiceLine {

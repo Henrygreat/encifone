@@ -10,6 +10,11 @@ import {
   listFinancePayments, listPortalEstimates, listPortalInvoices, logRetainerUsage, recordInvoicePayment, runRecurringBilling, updateEstimate,
 } from "@/modules/finance/service";
 import { membershipIdFor } from "../helpers/membership";
+import { saveFinancialDocumentSettings } from "@/modules/finance/document-settings";
+import { changeInvoicePublicLink, getInvoicePublicUrl, getPublicInvoice } from "@/modules/finance/invoice-sharing";
+import { settleCheckout } from "@/modules/finance/invoice-checkout";
+import { reconcileInvoiceRefund } from "@/modules/finance/invoice-refunds";
+import { renderSecondaryDocument } from "@/modules/finance/secondary-documents";
 
 const owners: ActiveMembership[] = [];
 const line = { quantity: 3, description: "Approved work", unitPriceMinor: 101, discountMinor: 2, taxRateBps: 2000 };
@@ -50,6 +55,7 @@ describe("Phase 4 finance", () => {
     const client = await prisma.client.create({ data: { organisationId, name: "Finance client" } });
     const session = { organisationId, clientId: client.id, portalUserId: "test-portal-principal" };
     const estimate = await createEstimate(staff, { clientId: client.id, title: "Quote", lines: [line] });
+    expect((await renderSecondaryDocument(staff, "estimate", estimate.id)).subarray(0, 5).toString()).toBe("%PDF-");
     expect(await listPortalEstimates(organisationId, client.id)).toEqual([]);
     await expect(createEstimate(other, { clientId: client.id, title: "Cross-tenant", lines: [line] })).rejects.toThrow(/not found/i);
     await updateEstimate(staff, estimate.id, { status: "SENT" });
@@ -58,6 +64,7 @@ describe("Phase 4 finance", () => {
     const invoices = await prisma.invoice.findMany({ where: { organisationId, estimateId: estimate.id } });
     expect(invoices).toHaveLength(1);
     const [draft] = invoices;
+    expect((await renderSecondaryDocument(staff, "proforma", draft.id)).subarray(0, 5).toString()).toBe("%PDF-");
     expect(await listPortalInvoices(organisationId, client.id)).toEqual([]);
     await expect(generatePortalInvoicePdf(session, draft.id)).rejects.toThrow(/not found/i);
     await expect(getInvoice(other, draft.id)).rejects.toThrow(/not found/i);
@@ -75,6 +82,9 @@ describe("Phase 4 finance", () => {
     const paid = await getInvoice(staff, draft.id);
     expect(paid).toMatchObject({ status: "PAID", amountPaidMinor: 361, balanceDueMinor: 0 });
     expect(paid.allocations).toHaveLength(2);
+    expect((await renderSecondaryDocument(staff, "receipt", draft.id, paid.allocations[0].id)).subarray(0, 5).toString()).toBe("%PDF-");
+    expect((await renderSecondaryDocument(staff, "statement", client.id)).subarray(0, 5).toString()).toBe("%PDF-");
+    await expect(renderSecondaryDocument(other, "statement", client.id)).rejects.toThrow(/client not found/i);
     const ledger = await listFinancePayments(staff, 1);
     expect(ledger.items).toHaveLength(2);
     expect(ledger.items[0].allocations[0].invoice.id).toBe(draft.id);
@@ -127,11 +137,38 @@ describe("Phase 4 finance", () => {
   it("applies credits without changing the issued total, and reconciles the residual balance", async () => {
     const draft = await createInvoice(staff, { creationKey: randomUUID(), currency: "JPY", paymentTermsDays: 30, lines: [line] });
     await finaliseInvoice(staff, draft.id);
-    await createCreditNote(staff, draft.id, { amountMinor: 61, reason: "Agreed adjustment" });
+    const { credit } = await createCreditNote(staff, draft.id, { amountMinor: 61, reason: "Agreed adjustment" });
+    expect((await renderSecondaryDocument(staff, "credit-note", draft.id, credit.id)).subarray(0, 5).toString()).toBe("%PDF-");
     const result = await recordInvoicePayment(staff, draft.id, {
       externalReference: "bank-jpy-300", amountMinor: 300, currency: "JPY", method: "BANK_TRANSFER", allocateToInvoice: true,
     });
     expect(result.invoice).toMatchObject({ totalMinor: 361, amountPaidMinor: 300, balanceDueMinor: 0, status: "PAID" });
+  });
+
+  it("snapshots issued branding and enforces signing, revocation and expiry on public links", async () => {
+    await saveFinancialDocumentSettings(staff, { template: "corporate", prefix: "INV-", legalName: "Original legal identity" });
+    const draft = await createInvoice(staff, { creationKey: randomUUID(), paymentTermsDays: 30, lines: [line] });
+    await expect(changeInvoicePublicLink(staff, draft.id, true)).rejects.toThrow(/issued invoice not found/i);
+    await finaliseInvoice(staff, draft.id);
+    await saveFinancialDocumentSettings(staff, { template: "modern", prefix: "NEW-", legalName: "New legal identity" });
+    await expect(changeInvoicePublicLink(other, draft.id, true)).rejects.toThrow(/issued invoice not found/i);
+    await changeInvoicePublicLink(staff, draft.id, true);
+    const getToken = async () => new URL(getInvoicePublicUrl(await getInvoice(staff, draft.id))!).pathname.split("/").at(-1)!;
+    const first = await getToken();
+    const publicInvoice = await getPublicInvoice(first);
+    expect(publicInvoice.documentSnapshot).toMatchObject({ settings: { template: "corporate", prefix: "INV-", legalName: "Original legal identity" } });
+    expect(publicInvoice).not.toHaveProperty("id");
+    expect(publicInvoice).not.toHaveProperty("internalNotes");
+    await expect(getPublicInvoice(first.replace(/^./, (value) => value === "A" ? "B" : "A"))).rejects.toThrow(/unavailable/i);
+    await changeInvoicePublicLink(staff, draft.id, true);
+    const second = await getToken();
+    await expect(getPublicInvoice(first)).rejects.toThrow(/unavailable/i);
+    await changeInvoicePublicLink(staff, draft.id, false);
+    await expect(getPublicInvoice(second)).rejects.toThrow(/unavailable/i);
+    await changeInvoicePublicLink(staff, draft.id, true);
+    const expired = await getToken();
+    await prisma.invoice.update({ where: { id: draft.id }, data: { publicLinkExpiresAt: new Date(0) } });
+    await expect(getPublicInvoice(expired)).rejects.toThrow(/unavailable/i);
   });
 
   it("renews a retainer once and invoices incremental overage for the closing period", async () => {
@@ -147,5 +184,41 @@ describe("Phase 4 finance", () => {
     expect(results.flatMap((result) => result.createdInvoiceIds)).toHaveLength(1);
     expect(await prisma.invoice.findFirst({ where: { retainerId: retainer.id } })).toMatchObject({ totalMinor: 1150 });
     expect(await prisma.retainer.findUnique({ where: { id: retainer.id } })).toMatchObject({ usedMinutes: 0, periodStartAt: renewal });
+  });
+
+  it("reserves the balance, checks account and amount, and allocates a successful Stripe checkout once", async () => {
+    const draft = await createInvoice(staff, { creationKey: randomUUID(), lines: [line] });
+    await finaliseInvoice(staff, draft.id);
+    const attempt = await prisma.invoiceCheckoutAttempt.create({
+      data: {
+        invoiceId: draft.id, accountId: "acct_finance_test", providerSessionId: "cs_finance_test",
+        amountMinor: 361, currency: "GBP", expiresAt: new Date(Date.now() + 60_000),
+      },
+    });
+    await expect(recordInvoicePayment(staff, draft.id, {
+      amountMinor: 1, currency: "GBP", method: "CASH", externalReference: "reserved-checkout-test", allocateToInvoice: true,
+    })).rejects.toMatchObject({ issues: ["An online checkout is awaiting completion or expiry for this invoice."] });
+    const event = {
+      id: "cs_finance_test", status: "complete", url: null, paid: true,
+      attemptId: attempt.id, amountMinor: 361, currency: "GBP", paymentId: "pi_finance_test",
+    } as const;
+    await settleCheckout("acct_other_test", event);
+    expect((await getInvoice(staff, draft.id)).balanceDueMinor).toBe(361);
+    await expect(settleCheckout(attempt.accountId, { ...event, amountMinor: 360 })).rejects.toThrow(/reserved invoice balance/);
+    await Promise.all([settleCheckout(attempt.accountId, event), settleCheckout(attempt.accountId, event)]);
+    const invoice = await getInvoice(staff, draft.id);
+    expect(invoice.status).toBe("PAID");
+    expect(invoice.amountPaidMinor).toBe(361);
+    expect(invoice.allocations).toHaveLength(1);
+    await prisma.organisation.update({ where: { id: staff.organisationId }, data: { stripeInvoiceAccountId: attempt.accountId } });
+    const refund = { id: "re_finance_test", paymentId: event.paymentId, amountMinor: 100, currency: "GBP", status: "succeeded" } as const;
+    await reconcileInvoiceRefund("acct_other_test", refund);
+    expect((await getInvoice(staff, draft.id)).amountPaidMinor).toBe(361);
+    await Promise.all([reconcileInvoiceRefund(attempt.accountId, refund), reconcileInvoiceRefund(attempt.accountId, refund)]);
+    expect(await getInvoice(staff, draft.id)).toMatchObject({ amountPaidMinor: 261, balanceDueMinor: 100, status: "PARTIALLY_PAID" });
+    await reconcileInvoiceRefund(attempt.accountId, { ...refund, id: "re_finance_remaining", amountMinor: 261 });
+    const reopened = await getInvoice(staff, draft.id);
+    expect(reopened).toMatchObject({ amountPaidMinor: 0, balanceDueMinor: 361, status: "FINALISED" });
+    expect(reopened.allocations[0].payment).toMatchObject({ refundedMinor: 361, status: "REFUNDED" });
   });
 });
