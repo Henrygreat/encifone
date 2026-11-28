@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { z } from "zod";
 import { Capability, roleHasCapability } from "@/core/permissions";
 import { requireActiveMembership } from "@/core/tenancy";
 import { env } from "@/lib/env";
-import { getWidgetSettings, saveWidget, widgetSchema } from "@/modules/inbox/chat";
+import { listWidgetSettings, saveWidget, widgetSchema } from "@/modules/inbox/chat";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,25 +12,30 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { MailboxSettings } from "../../mailboxes";
 import { SmsSettings } from "../../sms-numbers";
+import { CopyField } from "../../copy-field";
 
-export default async function ManageIntegration({ params, searchParams }: { params: Promise<{ provider: string }>; searchParams: Promise<{ result?: string }> }) {
+export default async function ManageIntegration({ params, searchParams }: { params: Promise<{ provider: string }>; searchParams: Promise<{ result?: string; widget?: string }> }) {
   const acting = await requireActiveMembership();
   if (!roleHasCapability(acting.role, Capability.ORG_UPDATE_SETTINGS)) notFound();
   const { provider } = await params;
   if (!["resend", "twilio", "website-chat"].includes(provider)) notFound();
-  const widget = provider === "website-chat" ? await getWidgetSettings(acting) : null;
-  const { result } = await searchParams;
+  const { result, widget: selectedWidget } = await searchParams;
+  const widgets = provider === "website-chat" ? await listWidgetSettings(acting) : [];
+  const widget = widgets.find((item) => item.publicKey === selectedWidget);
+  if (provider === "website-chat" && selectedWidget && !widget) notFound();
   async function save(form: FormData) {
     "use server";
     const member = await requireActiveMembership();
+    const key = form.has("key") ? z.uuid().parse(form.get("key")) : undefined;
     const input = widgetSchema.safeParse({
-      name: form.get("name"), welcome: form.get("welcome"), colour: form.get("colour"),
+      name: form.get("name"), widgetName: form.get("widgetName"), welcome: form.get("welcome"), colour: form.get("colour"),
       origins: String(form.get("origins") ?? "").split(/[\s,]+/).filter(Boolean),
       privacyNotice: form.get("privacy"), position: form.get("position"), enabled: form.has("enabled"),
     });
-    if (!input.success) redirect("/communications/manage/website-chat?result=invalid");
-    await saveWidget(member, input.data);
-    redirect("/communications/manage/website-chat?result=saved");
+    const settingsUrl = "/communications/manage/website-chat";
+    if (!input.success) redirect(`${settingsUrl}?result=invalid${key ? `&widget=${key}` : ""}`);
+    const saved = await saveWidget(member, input.data, key);
+    redirect(`${settingsUrl}?result=saved&widget=${saved.publicKey}`);
   }
   const snippet = widget ? `<script defer src="${new URL("/encifone-chat.js", env.APP_URL)}" data-widget="${widget.publicKey}"></script>` : null;
   return (
@@ -39,9 +45,16 @@ export default async function ManageIntegration({ params, searchParams }: { para
       {provider === "website-chat" && <Card>
         <CardHeader><CardTitle>Website chat</CardTitle></CardHeader>
         <CardContent className="space-y-4">
+          <nav aria-label="Chat widgets" className="flex flex-wrap gap-3 text-sm">
+            <Link className="underline" href="/communications/manage/website-chat" aria-current={!widget ? "page" : undefined}>New widget</Link>
+            {widgets.map((item) => <Link key={item.publicKey} aria-current={widget?.publicKey === item.publicKey ? "page" : undefined}
+              className="break-all underline" href={`?widget=${item.publicKey}`}>{item.widgetName ?? item.name}{item.enabled ? "" : " (disabled)"}</Link>)}
+          </nav>
           {result === "invalid" && <p role="alert">Check the fields and enter complete HTTPS origins without paths.</p>}
           {result === "saved" && <p role="status">Website chat settings saved.</p>}
-          <form action={save} className="grid gap-3 sm:grid-cols-2">
+          <form key={widget?.publicKey ?? "new"} action={save} className="grid gap-3 sm:grid-cols-2">
+            {widget && <input type="hidden" name="key" value={widget.publicKey} />}
+            <Label className="grid gap-1">Widget name<Input name="widgetName" defaultValue={widget?.widgetName ?? widget?.name} required maxLength={80} /></Label>
             <Label className="grid gap-1">Brand name<Input name="name" defaultValue={widget?.name} required maxLength={80} /></Label>
             <Label className="grid gap-1">Welcome message<Input name="welcome" defaultValue={widget?.welcome} required maxLength={300} /></Label>
             <Label className="grid gap-1">Accent colour<Input type="color" name="colour" defaultValue={widget?.colour ?? "#155e75"} /></Label>
@@ -51,7 +64,15 @@ export default async function ManageIntegration({ params, searchParams }: { para
             <Label><input name="enabled" type="checkbox" defaultChecked={widget?.enabled ?? true} /> Enable website chat</Label>
             <Button type="submit" className="justify-self-start">Save widget</Button>
           </form>
-          {snippet && <Label className="grid gap-1">Installation snippet<textarea readOnly className="min-h-20 rounded-md border bg-background p-2 font-mono text-sm" value={snippet} /></Label>}
+          {widget && snippet && <div className="space-y-3 border-t pt-4">
+            <h2 className="font-medium">Widget installation</h2>
+            <p className="text-sm text-muted-foreground">Paste the snippet into the footer of a website on your allowed origins. Load the site and refresh this page to confirm detection.</p>
+            <CopyField label="Installation snippet" value={snippet} multiline />
+            <CopyField label="Widget identifier" value={widget.publicKey} />
+            <p className="break-all text-sm" role="status">{widget.lastConnectedAt
+              ? `Last detected ${widget.lastConnectedAt.toISOString()} at ${widget.lastConnectedOrigin}`
+              : "No website connection detected yet."}</p>
+          </div>}
         </CardContent>
       </Card>}
       {provider === "resend" && <MailboxSettings result={result} />}

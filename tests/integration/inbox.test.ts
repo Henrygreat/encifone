@@ -161,11 +161,16 @@ it("keeps widget sessions, conversation records and internal notes isolated", as
   const config = { name: "Test chat", welcome: "Ask our team", colour: "#155e75",
     origins: ["https://customer.example"], privacyNotice: "Use the chat for enquiries.", enabled: true, position: "right" as const };
   const widget = await saveWidget(staff, config);
+  const secondWidget = await saveWidget(staff, { ...config, widgetName: "Second website" });
   const foreignWidget = await saveWidget(other, config);
+  expect(secondWidget.publicKey).not.toBe(widget.publicKey);
+  await expect(saveWidget(other, { ...config, enabled: false }, widget.publicKey)).rejects.toThrow();
+  expect(await findPublicWidget(widget.publicKey, "https://customer.example")).toMatchObject({ enabled: true });
   await expect(findPublicWidget(widget.publicKey, "https://other.example")).rejects.toThrow(/unavailable/);
   const session = await runChatAction(widget, { action: "start", body: "<img src=x> greeting", email: "client@example.test" });
   if (!("token" in session) || !session.token) throw new Error("Missing visitor session.");
   const token = session.token;
+  await expect(runChatAction(secondWidget, { action: "poll", token })).rejects.toThrow(/unavailable/);
   await expect(runChatAction(foreignWidget, { action: "poll", token })).rejects.toThrow(/unavailable/);
   const before = await listInbox(staff, { page: 1 });
   const [thread] = before.items;

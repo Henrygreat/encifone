@@ -1,6 +1,6 @@
 import { NotFoundError, ValidationError } from "@/lib/api";
 import { checkRateLimit, clientIpFrom, RateLimitError } from "@/lib/rate-limit";
-import { chatActionSchema, findPublicWidget, runChatAction } from "@/modules/inbox/chat";
+import { chatActionSchema, findPublicWidget, recordWidgetConnection, runChatAction } from "@/modules/inbox/chat";
 
 type Context = { params: Promise<{ key: string }> };
 
@@ -33,9 +33,12 @@ async function handle(request: Request, context: Context) {
     const widget = await findPublicWidget(key, origin);
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers });
     await checkRateLimit(`chat:${widget.id}:${clientIpFrom(request)}`, 90, 60, true);
-    if (request.method === "GET") return Response.json({
+    if (request.method === "GET") {
+      await recordWidgetConnection(widget, origin);
+      return Response.json({
       name: widget.name, welcome: widget.welcome, colour: widget.colour, position: widget.position, privacyNotice: widget.privacyNotice,
-    }, { headers });
+      }, { headers });
+    }
     if (Number(request.headers.get("content-length")) > 16_000) return new Response(null, { status: 413, headers });
     const parsed = chatActionSchema.safeParse(await readLimitedJson(request));
     if (!parsed.success) throw new ValidationError(["Invalid chat request."]);

@@ -14,7 +14,7 @@ export async function getIntegrationOverview(acting: ActiveMembership, now = new
   const [mailboxes, numbers, widgets, ai, sent, received, failed] = await Promise.all([
     listMailboxes(acting),
     listSmsNumbers(acting),
-    prisma.chatWidget.findMany({ where: { organisationId }, select: { name: true, enabled: true }, orderBy: { name: "asc" } }),
+    prisma.chatWidget.findMany({ where: { organisationId }, select: { name: true, widgetName: true, enabled: true, lastConnectedAt: true }, orderBy: { name: "asc" } }),
     getAIConfig(acting),
     prisma.inboxMessage.count({ where: { ...messages, kind: "OUTBOUND", OR: [{ delivery: null }, { delivery: { in: ["ACCEPTED", "DELIVERED"] } }] } }),
     prisma.inboxMessage.count({ where: { ...messages, kind: "INBOUND" } }),
@@ -22,13 +22,16 @@ export async function getIntegrationOverview(acting: ActiveMembership, now = new
   ]);
   const activeChannels = [mailboxes, numbers, widgets].filter((items) => items.some((item) => item.enabled)).length;
   const aiActive = ai.enabled && ai.provider === "ANTHROPIC" && ai.hasApiKey;
+  const emailConnected = mailboxes.some((item) => item.enabled && !item.lastError);
+  const smsConnected = numbers.some((item) => item.enabled);
+  const widgetConnected = widgets.some((item) => item.enabled && item.lastConnectedAt);
   return {
     mailboxes, numbers, widgets, ai, aiActive,
     metrics: {
-      providers: activeChannels + Number(aiActive),
+      providers: [emailConnected, smsConnected, widgetConnected, aiActive].filter(Boolean).length,
       activeChannels, sent, received, failed,
       attention: mailboxes.filter((mailbox) => mailbox.enabled && mailbox.lastError).length +
-        Number(ai.enabled && !aiActive),
+        widgets.filter((widget) => widget.enabled && !widget.lastConnectedAt).length + Number(ai.enabled && !aiActive),
     },
   };
 }

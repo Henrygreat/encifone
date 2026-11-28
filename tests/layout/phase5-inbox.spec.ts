@@ -35,6 +35,7 @@ test("website visitor and staff exchange messages without exposing internal note
   if (!address || typeof address === "string") throw new Error("Widget test site did not start.");
   const website = `http://127.0.0.1:${address.port}`;
   try {
+  await page.getByLabel("Widget name").fill("Main website");
   await page.getByLabel("Brand name").fill("Support team");
   await page.getByLabel("Welcome message").fill("Welcome to chat");
   await page.getByLabel("Allowed website origins").fill(website);

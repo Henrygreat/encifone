@@ -14,6 +14,7 @@ const websiteOrigin = z.url().transform((value) => new URL(value)).refine((url) 
 ).transform((url) => url.origin);
 export const widgetSchema = z.object({
   name: z.string().trim().min(1).max(80),
+  widgetName: z.string().trim().min(1).max(80).optional(),
   welcome: z.string().trim().min(1).max(300),
   colour: z.string().regex(/^#[0-9a-f]{6}$/i),
   origins: z.array(websiteOrigin).min(1).max(20),
@@ -22,20 +23,32 @@ export const widgetSchema = z.object({
   enabled: z.boolean(),
 });
 
-export async function getWidgetSettings(acting: ActiveMembership) {
+export async function listWidgetSettings(acting: ActiveMembership) {
   requireCapability(acting, Capability.ORG_UPDATE_SETTINGS);
-  return prisma.chatWidget.findUnique({ where: { organisationId: acting.organisationId } });
+  return prisma.chatWidget.findMany({ where: { organisationId: acting.organisationId }, orderBy: [{ widgetName: "asc" }, { id: "asc" }] });
 }
 
-export async function saveWidget(acting: ActiveMembership, input: z.infer<typeof widgetSchema>) {
+export async function saveWidget(acting: ActiveMembership, input: z.infer<typeof widgetSchema>, publicKey?: string) {
   requireCapability(acting, Capability.ORG_UPDATE_SETTINGS);
   const organisationId = acting.organisationId;
   return prisma.$transaction(async (tx) => {
-    const widget = await tx.chatWidget.upsert({ where: { organisationId }, create: { organisationId, ...input }, update: input });
+    const widget = publicKey
+      ? await tx.chatWidget.update({ where: { publicKey, organisationId }, data: input })
+      : await tx.chatWidget.create({ data: { organisationId, ...input } });
     await writeAuditLog({
       organisationId, actorUserId: acting.userId, action: "inbox.widget_updated", resourceType: "ChatWidget", resourceId: widget.id,
     }, tx);
     return widget;
+  });
+}
+
+export async function recordWidgetConnection(widget: { id: string; lastConnectedAt: Date | null }, origin: string) {
+  const now = new Date();
+  const cutoff = new Date(+now - 5 * 60_000);
+  if (widget.lastConnectedAt && widget.lastConnectedAt > cutoff) return;
+  await prisma.chatWidget.updateMany({
+    where: { id: widget.id, enabled: true, origins: { has: origin }, OR: [{ lastConnectedAt: null }, { lastConnectedAt: { lte: cutoff } }] },
+    data: { lastConnectedAt: now, lastConnectedOrigin: origin },
   });
 }
 

@@ -328,15 +328,18 @@ model ChatWidget {
   organisationId String
   organisation   Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
   name           String
+  widgetName     String?
   welcome        String
   colour         String
   origins        String[]
   privacyNotice  String
   position       String @default("right")
   enabled        Boolean @default(true)
+  lastConnectedAt DateTime?
+  lastConnectedOrigin String?
   visitors       ChatVisitor[]
 
-  @@unique([organisationId])
+  @@index([organisationId])
 }
 
 model ChatVisitor {
