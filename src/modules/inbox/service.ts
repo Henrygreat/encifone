@@ -6,6 +6,7 @@ import type { ActiveMembership } from "@/core/tenancy";
 import { NotFoundError, ValidationError } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import { requireCapability } from "@/modules/operations/auth";
+import { sendMailboxReply } from "./email";
 
 export const updateConversationSchema = z.object({
   status: z.enum(["OPEN", "PENDING", "RESOLVED", "ARCHIVED"]).optional(),
@@ -107,6 +108,9 @@ export async function updateInboxConversation(acting: ActiveMembership, id: stri
 
 export async function replyToConversation(acting: ActiveMembership, id: string, input: z.infer<typeof replySchema>) {
   requireCapability(acting, Capability.INBOX_MANAGE);
+  if (input.kind === "OUTBOUND" && await prisma.inboxConversation.findFirst({
+    where: { id, organisationId: acting.organisationId, channel: "EMAIL" }, select: { id: true },
+  })) return sendMailboxReply(acting, id, input);
   return prisma.$transaction(async (tx) => {
     const where = { id, organisationId: acting.organisationId };
     const conversation = await tx.inboxConversation.findFirst({ where });

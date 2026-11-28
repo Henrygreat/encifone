@@ -76,6 +76,7 @@ model User {
 model Organisation {
   inboxConversations InboxConversation[]
   chatWidgets ChatWidget[]
+  inboxMailboxes InboxMailbox[]
   id              String   @id @default(cuid())
   name            String
   slug            String   @unique
@@ -209,6 +210,8 @@ model InboxConversation {
   updatedAt      DateTime @updatedAt
   messages       InboxMessage[]
   visitor        ChatVisitor?
+  mailboxId      String?
+  mailbox        InboxMailbox? @relation(fields: [mailboxId], references: [id], onDelete: SetNull)
 
   @@index([organisationId, status, updatedAt])
   @@index([organisationId, assigneeId])
@@ -223,9 +226,40 @@ model InboxMessage {
   authorId       String?
   requestKey     String
   createdAt      DateTime @default(now())
+  mailboxId      String?
+  mailbox        InboxMailbox? @relation(fields: [mailboxId], references: [id], onDelete: SetNull)
+  providerId     String?
+  internetId     String?
+  delivery       InboxDelivery?
 
   @@unique([conversationId, requestKey])
+  @@unique([mailboxId, providerId])
+  @@index([mailboxId, internetId])
   @@index([conversationId, createdAt, id])
+}
+
+enum InboxDelivery {
+  PENDING
+  ACCEPTED
+  DELIVERED
+  FAILED
+}
+
+model InboxMailbox {
+  id                 String @id @default(cuid())
+  organisationId     String
+  organisation       Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  publicKey          String @unique @default(uuid())
+  address            String
+  encryptedApiKey    String?
+  encryptedWebhook   String?
+  enabled            Boolean @default(true)
+  lastSyncAt         DateTime?
+  lastError          String?
+  conversations      InboxConversation[]
+  messages           InboxMessage[]
+
+  @@unique([organisationId, address])
 }
 
 model ChatWidget {

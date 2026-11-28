@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { MailboxSettings } from "./mailboxes";
 
 export default async function CommunicationSettings({ searchParams }: { searchParams: Promise<{ result?: string }> }) {
   const acting = await requireActiveMembership();
@@ -29,7 +30,7 @@ export default async function CommunicationSettings({ searchParams }: { searchPa
   const snippet = widget ? `<script defer src="${new URL("/encifone-chat.js", env.APP_URL)}" data-widget="${widget.publicKey}"></script>` : null;
   return (
     <div className="flex max-w-4xl flex-col gap-5 p-4 sm:p-6">
-      <PageHeader title="Communication settings" description="Configure the website chat used by your organisation." />
+      <PageHeader title="Communication settings" description="Configure website chat and shared email mailboxes." />
       <Card>
         <CardHeader><CardTitle>Website chat</CardTitle></CardHeader>
         <CardContent className="space-y-4">
@@ -48,6 +49,7 @@ export default async function CommunicationSettings({ searchParams }: { searchPa
           {snippet && <Label className="grid gap-1">Installation snippet<textarea readOnly className="min-h-20 rounded-md border bg-background p-2 font-mono text-sm" value={snippet} /></Label>}
         </CardContent>
       </Card>
+      <MailboxSettings result={result} />
     </div>
   );
 }

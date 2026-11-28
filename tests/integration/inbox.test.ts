@@ -1,11 +1,13 @@
 import { randomUUID } from "node:crypto";
-import { afterAll, expect, it } from "vitest";
+import { afterAll, expect, it, vi } from "vitest";
+import { Webhook } from "svix";
 import { prisma } from "@/lib/prisma";
 import { registerOwner } from "@/modules/identity/service";
 import type { ActiveMembership } from "@/core/tenancy";
 import { findPublicWidget, runChatAction, saveWidget } from "@/modules/inbox/chat";
 import { getInboxConversation, listInbox, replyToConversation, updateInboxConversation } from "@/modules/inbox/service";
 import { membershipIdFor } from "../helpers/membership";
+import { configureMailbox, InvalidMailWebhook, listMailboxes, manageMailbox, receiveMailboxEvent } from "@/modules/inbox/email";
 
 const owners: ActiveMembership[] = [];
 async function owner(): Promise<ActiveMembership> {
@@ -23,6 +25,59 @@ afterAll(async () => {
     await prisma.organisation.delete({ where: { id: item.organisationId } });
     await prisma.user.delete({ where: { id: item.userId } });
   }
+});
+
+it("authenticates mail events, deduplicates messages and records confirmed sends using a mocked provider", async () => {
+  const [staff, other] = await Promise.all([owner(), owner()]);
+  const address = "support@example.test";
+  const apiKey = "re_local_mock_only";
+  const webhook = `whsec_${Buffer.from("inbox-local-signature-secret").toString("base64")}`;
+  await configureMailbox(staff, { address, apiKey, webhook });
+  const [mailbox] = await listMailboxes(staff);
+  expect(mailbox).not.toHaveProperty("encryptedApiKey");
+  expect((await prisma.inboxMailbox.findUniqueOrThrow({ where: { id: mailbox.id } })).encryptedApiKey).not.toContain(apiKey);
+  expect(await listMailboxes(other)).toEqual([]);
+  await expect(manageMailbox(other, mailbox.id, "disconnect")).rejects.toThrow(/not found/);
+  const inboundId = randomUUID();
+  const outboundId = randomUUID();
+  const provider = vi.fn(async (url: string | URL | Request, options?: RequestInit) => {
+    if (String(url).endsWith(inboundId)) return Response.json({
+      id: inboundId, from: "Customer <visitor@example.test>", to: [address], subject: "Support request",
+      text: "A real message from the local fixture", message_id: "<test@example.test>",
+    });
+    expect(options?.method).toBe("POST");
+    expect(options?.body).toContain("In-Reply-To");
+    return Response.json({ id: outboundId });
+  });
+  vi.stubGlobal("fetch", provider);
+  const signed = (type: string, id: string) => {
+    const body = JSON.stringify({ type, data: { email_id: id } });
+    const timestamp = new Date();
+    const eventId = randomUUID();
+    return { body, headers: new Headers({ "svix-id": eventId,
+      "svix-timestamp": String(Math.floor(timestamp.getTime() / 1000)),
+      "svix-signature": new Webhook(webhook).sign(eventId, timestamp, body),
+    }) };
+  };
+  try {
+    const inbound = signed("email.received", inboundId);
+    await expect(receiveMailboxEvent(mailbox.publicKey, inbound.body + " ", inbound.headers)).rejects.toBeInstanceOf(InvalidMailWebhook);
+    expect(provider).not.toHaveBeenCalled();
+    await Promise.all([receiveMailboxEvent(mailbox.publicKey, inbound.body, inbound.headers), receiveMailboxEvent(mailbox.publicKey, inbound.body, inbound.headers)]);
+    const inbox = await listInbox(staff, { page: 1 });
+    expect(inbox.items).toHaveLength(1);
+    const [conversation] = inbox.items;
+    expect(conversation).toMatchObject({ unread: 1, channel: "EMAIL", customerEmail: "visitor@example.test" });
+    const reply = { kind: "OUTBOUND" as const, body: "Here is the answer.", requestKey: randomUUID(), version: conversation.version };
+    expect(await replyToConversation(staff, conversation.id, reply)).toMatchObject({ delivery: "ACCEPTED" });
+    await replyToConversation(staff, conversation.id, reply);
+    expect(provider.mock.calls.filter(([, options]) => options?.method === "POST")).toHaveLength(1);
+    const delivered = signed("email.delivered", outboundId);
+    await receiveMailboxEvent(mailbox.publicKey, delivered.body, delivered.headers);
+    expect((await getInboxConversation(staff, conversation.id)).messages.at(-1)).toMatchObject({ delivery: "DELIVERED" });
+    await manageMailbox(staff, mailbox.id, "disconnect");
+    await expect(receiveMailboxEvent(mailbox.publicKey, inbound.body, inbound.headers)).rejects.toThrow(/not found/);
+  } finally { vi.unstubAllGlobals(); }
 });
 
 it("keeps widget sessions, conversation records and internal notes isolated", async () => {

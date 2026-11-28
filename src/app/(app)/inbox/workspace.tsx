@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -35,6 +35,7 @@ export function InboxWorkspace({ scope, canManage, canConfigure, members }: {
   const [page, setPage] = useState(1);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const draftKey = useRef<{ fingerprint: string; requestKey: string } | null>(null);
   const params = new URLSearchParams({ page: String(page), ...(search && { search }), ...(status && { status }),
     ...(priority && { priority }), ...(tag && { tag }), ...(mine && { mine: "true" }), ...(unread && { unread: "true" }), ...(snoozed && { showSnoozed: "true" }) });
   const list = useQuery({ queryKey: ["inbox", scope, params.toString()], queryFn: () => request<Inbox>(`/api/v1/inbox?${params}`), refetchInterval: 8000 });
@@ -69,11 +70,18 @@ export function InboxWorkspace({ scope, canManage, canConfigure, members }: {
     if (!conversation || busy) return;
     const form = event.currentTarget;
     const fields = new FormData(form);
-    if (await mutate("POST", { body: fields.get("body"), kind: fields.get("kind"), version: conversation.version, requestKey: crypto.randomUUID() })) form.reset();
+    const body = fields.get("body");
+    const kind = fields.get("kind");
+    const fingerprint = JSON.stringify([selected, body, kind]);
+    if (draftKey.current?.fingerprint !== fingerprint) draftKey.current = { fingerprint, requestKey: crypto.randomUUID() };
+    if (await mutate("POST", { body, kind, version: conversation.version, requestKey: draftKey.current.requestKey })) {
+      draftKey.current = null;
+      form.reset();
+    }
   }
   return (
     <div className="flex min-w-0 flex-col gap-5 p-4 sm:p-6">
-      <PageHeader title="Universal Inbox" description="Manage customer chats and internal notes in one workspace." />
+      <PageHeader title="Universal Inbox" description="Manage customer chats, email and internal notes in one workspace." />
       <div className="flex flex-wrap gap-2">
         {canConfigure && <Button asChild variant="outline"><Link href="/communications">Communication settings</Link></Button>}
         <Button asChild variant="outline"><Link href="/inbox/analytics">Communication analytics</Link></Button>
@@ -129,13 +137,13 @@ export function InboxWorkspace({ scope, canManage, canConfigure, members }: {
               </div>
               <ol className="max-h-[55vh] space-y-2 overflow-y-auto">
                 {data.messages.map((message) => <li key={message.id} className="rounded-md border p-3">
-                  <p className="text-xs text-muted-foreground">{message.kind === "NOTE" ? "Internal note" : message.kind === "INBOUND" ? "Visitor" : "Staff reply"} · {new Date(message.createdAt).toLocaleString()}</p>
+                  <p className="text-xs text-muted-foreground">{message.kind === "NOTE" ? "Internal note" : message.kind === "INBOUND" ? "Customer" : "Staff reply"} · {new Date(message.createdAt).toLocaleString()}{message.delivery ? ` · ${message.delivery.toLowerCase()}` : ""}</p>
                   <p className="whitespace-pre-wrap break-words text-sm">{message.body}</p>
                 </li>)}
               </ol>
               {canManage && <form key={selected} onSubmit={reply} className="space-y-2">
                 <Label className="grid gap-1">Message type<select name="kind" className={selectClass}>
-                  {["OPEN", "PENDING"].includes(conversation.status) && conversation.channel === "CHAT" && <option value="OUTBOUND">Customer reply</option>}
+                  {["OPEN", "PENDING"].includes(conversation.status) && ["CHAT", "EMAIL"].includes(conversation.channel) && <option value="OUTBOUND">Customer reply</option>}
                   <option value="NOTE">Internal note</option>
                 </select></Label>
                 <Label className="grid gap-1">Message<textarea required rows={4} maxLength={6000} name="body" className="w-full rounded-md border bg-background p-2 text-sm" /></Label>
