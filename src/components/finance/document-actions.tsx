@@ -1,4 +1,5 @@
 "use client";
+import type { getFinanceDocumentOptions } from "@/modules/finance/service";
 
 import { useRef, useState, type FormEvent } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -79,8 +80,9 @@ export function useFinanceMutation(endpoint: string, queryKey: string) {
 }
 
 export function FinanceDocumentForm({
-  kind,
+  kind, options,
 }: {
+  options: Awaited<ReturnType<typeof getFinanceDocumentOptions>>;
   kind: "estimates" | "invoices";
 }) {
   const { submit, pending, error } = useFinanceMutation(
@@ -89,17 +91,29 @@ export function FinanceDocumentForm({
   );
   const creationKey = useRef<string | undefined>(undefined);
   const [lineCount, setLineCount] = useState(1);
+  const [clientId, setClientId] = useState("");
+  const [selectionError, setSelectionError] = useState("");
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = event.currentTarget;
     const fields = new FormData(form);
     const text = (name: string) => String(fields.get(name) ?? "").trim();
     const lines = Array.from({ length: lineCount }, (_, i) => ({
+      serviceItemId: text(`service-${i}`) || undefined,
       description: text(`description-${i}`),
       quantity: Number(text(`quantity-${i}`)),
       unitPriceMinor: Number(text(`amount-${i}`)),
       taxRateBps: Number(text(`tax-${i}`)),
     }));
+    const serviceCurrencies = new Set(lines.flatMap((line) =>
+      options.services.filter((service) => service.id === line.serviceItemId).map((service) => service.currency),
+    ));
+    const currency = text("currency").toUpperCase() || [...serviceCurrencies][0];
+    if (serviceCurrencies.size > 1 || [...serviceCurrencies].some((code) => code !== currency)) {
+      setSelectionError("Choose catalogue services priced in the document currency.");
+      return;
+    }
+    setSelectionError("");
     creationKey.current ??= crypto.randomUUID();
     const created = await submit({
       ...(kind === "estimates"
@@ -110,13 +124,15 @@ export function FinanceDocumentForm({
             serviceRequestId: text("serviceRequestId") || undefined,
           }),
       clientId: text("clientId") || undefined,
-      currency: text("currency") || undefined,
+      projectId: text("projectId") || undefined,
+      currency,
       lines,
     });
     if (created) {
       creationKey.current = undefined;
       form.reset();
       setLineCount(1);
+      setClientId("");
     }
   }
   return (
@@ -133,8 +149,11 @@ export function FinanceDocumentForm({
             </Label>
           )}
           <Label className="grid gap-2">
-            Client ID (optional)
-            <Input name="clientId" />
+            Client (optional)
+            <select name="clientId" value={clientId} onChange={(event) => setClientId(event.target.value)} className="min-w-0 rounded-md border bg-background p-2">
+              <option value="">No client</option>
+              {options.clients.map((client) => <option key={client.id} value={client.id}>{client.name}</option>)}
+            </select>
           </Label>
           <Label className="grid gap-2">
             Currency code
@@ -143,6 +162,15 @@ export function FinanceDocumentForm({
               maxLength={3}
               placeholder="Organisation default"
             />
+          </Label>
+          <Label className="grid gap-2">
+            Project (optional)
+            <select name="projectId" className="min-w-0 rounded-md border bg-background p-2">
+              <option value="">No project</option>
+              {options.projects.filter((project) => !clientId || !project.clientId || project.clientId === clientId).map((project) => (
+                <option key={project.id} value={project.id}>{project.name}</option>
+              ))}
+            </select>
           </Label>
           {kind === "invoices" && (
             <>
@@ -163,6 +191,23 @@ export function FinanceDocumentForm({
             className="grid gap-3 rounded-md border p-3 sm:grid-cols-2 lg:grid-cols-4"
           >
             <legend className="px-1 text-sm">Line {i + 1}</legend>
+            {options.services.length > 0 && (
+              <Label className="grid gap-2 sm:col-span-2 lg:col-span-4">
+                Catalogue service (optional)
+                <select name={`service-${i}`} className="min-w-0 rounded-md border bg-background p-2" onChange={(event) => {
+                  const service = options.services.find((item) => item.id === event.target.value);
+                  if (!service) return;
+                  const form = event.target.form;
+                  const description = form?.elements.namedItem(`description-${i}`);
+                  const amount = form?.elements.namedItem(`amount-${i}`);
+                  if (description instanceof HTMLInputElement) description.value = service.name;
+                  if (amount instanceof HTMLInputElement) amount.value = String(service.unitPriceMinor);
+                }}>
+                  <option value="">Custom line</option>
+                  {options.services.map((service) => <option key={service.id} value={service.id}>{service.name} ({service.currency})</option>)}
+                </select>
+              </Label>
+            )}
             <Label className="grid gap-2">
               Description
               <Input name={`description-${i}`} maxLength={500} required />
@@ -221,6 +266,7 @@ export function FinanceDocumentForm({
             Save draft
           </Button>
         </div>
+        {selectionError && <p role="alert" className="text-sm text-destructive">{selectionError}</p>}
         {error && (
           <p role="alert" className="text-sm text-destructive">
             {error}

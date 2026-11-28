@@ -44,6 +44,36 @@ test("a finance owner drafts, issues, and reconciles an invoice across desktop a
   await page.getByRole("button", { name: "Record payment", exact: true }).click();
   await expect(page.getByText(/PAID.*Balance/)).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(391);
+  await page.goto("/payments");
+  await expect(page.getByText(`Reference browser-${key}`)).toBeVisible();
+  await expect(page.getByText(/Invoice 1.*allocated/)).toBeVisible();
+});
+
+test("all finance sidebar destinations load and catalogue prices feed estimates", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await signInOwner(page);
+  const service = await page.request.post("/api/v1/service-items", {
+    data: { name: "Catalogue consultation", unitPriceMinor: 4200, currency: "GBP" },
+  });
+  expect(service.status()).toBe(201);
+  const { id: serviceId } = await service.json();
+  const subscription = await page.request.post("/api/v1/subscriptions", {
+    data: { title: "Recurring support", amountMinor: 12000, currency: "GBP", billingInterval: "ANNUAL", startDate: new Date(Date.now() - 60_000).toISOString() },
+  });
+  expect(subscription.status()).toBe(201);
+  await page.reload();
+  await expect(page.getByText("Monthly recurring revenue", { exact: false }).locator("..")).toContainText("10.00");
+  for (const label of ["Estimates", "Invoices", "Payments", "Expenses", "Subscriptions", "Retainers", "Profitability", "Forecasting"]) {
+    await page.locator("nav").getByRole("link", { name: label, exact: true }).click();
+    await expect(page.getByRole("heading", { name: label, exact: true }).last()).toBeVisible();
+  }
+  await page.locator("nav").getByRole("link", { name: "Estimates", exact: true }).click();
+  await page.getByText("New estimate", { exact: true }).click();
+  await page.getByLabel("Title", { exact: true }).fill("Estimate from catalogue");
+  await page.getByLabel("Catalogue service (optional)").selectOption(serviceId);
+  await expect(page.getByLabel("Unit price (minor units)")).toHaveValue("4200");
+  await page.getByRole("button", { name: "Save draft" }).click();
+  await expect(page.getByText("Estimate from catalogue", { exact: true })).toBeVisible();
 });
 
 test("a portal client accepts a shared estimate and downloads only its own issued invoice", async ({ page, browser }) => {

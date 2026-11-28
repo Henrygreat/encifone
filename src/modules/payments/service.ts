@@ -19,6 +19,7 @@ export async function listPayments(acting: ActiveMembership, query: ListPayments
 
   const where: Prisma.PaymentWhereInput = {
     organisationId: acting.organisationId,
+    provider: PaymentProvider.STRIPE,
     ...(query.status ? { status: query.status } : {}),
     ...(query.opportunityId ? { opportunityId: query.opportunityId } : {}),
   };

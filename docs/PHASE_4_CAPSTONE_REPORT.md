@@ -64,3 +64,16 @@ The operational finance workflow requires no new environment variables. The bran
 - GitHub, master, Coolify and the production database were left untouched.
 
 After staging verification, proceed to Phase 5’s real KPI drill-downs, read-only AI Command Centre and audit coverage for the full MVP journey.
+
+## Navigation follow-up and deployment
+
+On 2026-11-28 the feature branch, local `master`, local `origin/master` and live GitHub `master` all pointed to `8bcbcc9`. That revision had seven finance pages, eight sidebar entries without links, and no Payments page. The deployed revision was not independently inspected.
+
+The follow-up adds the finance-authorised Payments ledger, enables all eight links in the shared sidebar and command palette, and connects estimate and invoice creation to the client, project and service catalogue records. The Payments ledger shows invoice allocations and CRM deposits. The dashboard shows recorded collections and outstanding receivables beside MRR. The follow-up requires no new migration or runtime configuration.
+
+1. Review the feature branch and rehearse migration on a representative staging database. Confirm all previously shipped Phase 4 migrations are applied.
+2. After the owner merges and pushes, let the existing CI and Coolify workflow build the app and worker from the approved commit. Follow the [deployment runbook](DEPLOYMENT_RUNBOOK.md).
+3. Verify the one-shot `migrate` service exits successfully before the app and worker start. Check the deployed commit in Coolify, app readiness at `/api/health/ready`, and worker health.
+4. Sign in as an authorised finance user and verify all eight links, dashboard totals, an invoice allocation and portal PDF isolation. Check an existing CRM deposit through its normal workflow.
+
+Externally received invoice payments are reconciled by reference. Checkout, automated bank matching and provider settlement remain outside this release. No deployment, merge or push was performed during the follow-up.

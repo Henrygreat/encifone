@@ -6,8 +6,8 @@ import { registerOwner } from "@/modules/identity/service";
 import { createProject } from "@/modules/projects/service";
 import {
   acceptPortalEstimate, createCreditNote, createEstimate, createInvoice, createRetainer, createSubscription, finaliseInvoice,
-  generatePortalInvoicePdf, getFinancialForecast, getFinancialMetrics, getInvoice,
-  listPortalEstimates, listPortalInvoices, logRetainerUsage, recordInvoicePayment, runRecurringBilling, updateEstimate,
+  generatePortalInvoicePdf, getFinanceDocumentOptions, getFinancialForecast, getFinancialMetrics, getInvoice,
+  listFinancePayments, listPortalEstimates, listPortalInvoices, logRetainerUsage, recordInvoicePayment, runRecurringBilling, updateEstimate,
 } from "@/modules/finance/service";
 import { membershipIdFor } from "../helpers/membership";
 
@@ -75,6 +75,12 @@ describe("Phase 4 finance", () => {
     const paid = await getInvoice(staff, draft.id);
     expect(paid).toMatchObject({ status: "PAID", amountPaidMinor: 361, balanceDueMinor: 0 });
     expect(paid.allocations).toHaveLength(2);
+    const ledger = await listFinancePayments(staff, 1);
+    expect(ledger.items).toHaveLength(2);
+    expect(ledger.items[0].allocations[0].invoice.id).toBe(draft.id);
+    expect(ledger.items[0]).not.toHaveProperty("providerPaymentId");
+    expect((await listFinancePayments(other, 1)).items).toEqual([]);
+    await expect(listFinancePayments({ ...staff, role: "CLIENT_USER" }, 1)).rejects.toThrow(/permission/i);
     const [published] = await listPortalInvoices(organisationId, client.id);
     expect(published).not.toHaveProperty("internalNotes");
     expect(published).not.toHaveProperty("allocations");
@@ -86,15 +92,23 @@ describe("Phase 4 finance", () => {
     const { organisationId, membershipId } = staff;
     const client = await prisma.client.create({ data: { organisationId, name: "Project client" } });
     const project = await createProject(staff, { clientId: client.id, name: "Billable work", memberIds: [] });
+    const service = await prisma.serviceItem.create({
+      data: { organisationId, name: "Billable catalogue item", unitPriceMinor: 101, currency: "GBP" },
+    });
+    const options = await getFinanceDocumentOptions(staff);
+    expect(options.projects).toContainEqual({ id: project.id, name: project.name, clientId: client.id });
+    expect(options.services).toContainEqual({ id: service.id, name: service.name, unitPriceMinor: 101, currency: "GBP" });
+    expect(await getFinanceDocumentOptions(other)).toEqual({ clients: [], projects: [], services: [] });
     const entry = await prisma.timeEntry.create({
       data: { organisationId, membershipId, projectId: project.id, workDate: new Date(), minutes: 90 },
     });
-    const input = { creationKey: randomUUID(), timeEntryId: entry.id, paymentTermsDays: 30, lines: [line] };
+    const input = { creationKey: randomUUID(), timeEntryId: entry.id, paymentTermsDays: 30, lines: [{ ...line, serviceItemId: service.id }] };
     await expect(createInvoice(staff, input)).rejects.toMatchObject({ issues: ["Approved billable time must belong to a client project."] });
     await prisma.timeEntry.update({ where: { id: entry.id }, data: { approvalStatus: "APPROVED" } });
     const [invoice, retry] = await Promise.all([createInvoice(staff, input), createInvoice(staff, { ...input, creationKey: randomUUID() })]);
     expect(retry.id).toBe(invoice.id);
     expect(invoice).toMatchObject({ projectId: project.id, clientId: client.id, timeEntryId: entry.id });
+    expect(invoice.lines[0]).toMatchObject({ serviceItemId: service.id, unitPriceMinor: 101 });
   });
 
   it("generates one recurring draft per due date and excludes foreign currencies from base-currency MRR", async () => {

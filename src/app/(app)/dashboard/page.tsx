@@ -411,6 +411,7 @@ export default async function DashboardPage() {
               <div className="flex flex-wrap gap-2">
                 <Button asChild variant="outline"><Link href="/subscriptions">Subscriptions</Link></Button>
                 <Button asChild variant="outline"><Link href="/invoices">Invoices</Link></Button>
+                <Button asChild variant="outline"><Link href="/payments">Payments</Link></Button>
                 <Button asChild variant="outline"><Link href="/estimates">Estimates</Link></Button>
                 <Button asChild variant="outline"><Link href="/expenses">Expenses</Link></Button>
                 <Button asChild variant="outline"><Link href="/retainers">Retainers</Link></Button>
@@ -418,6 +419,10 @@ export default async function DashboardPage() {
                 <Button asChild variant="outline"><Link href="/profitability">Financial reporting</Link></Button>
               </div>
             </div>
+            <dl className="grid gap-3 text-sm sm:grid-cols-2">
+              <div><dt className="text-muted-foreground">Recorded collections</dt><dd className="font-medium tabular-nums">{formatFinanceMoney(finance.collectedRevenueMinor, finance.currency)}</dd></div>
+              <div><dt className="text-muted-foreground">Outstanding receivables</dt><dd className="font-medium tabular-nums">{formatFinanceMoney(finance.outstandingReceivablesMinor, finance.currency)}</dd></div>
+            </dl>
           </BentoCard>
         )}
       </BentoGrid>

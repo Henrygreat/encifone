@@ -1,4 +1,5 @@
 "use client";
+import type { getFinanceDocumentOptions } from "@/modules/finance/service";
 
 import { formatFinanceMoney as money } from "@/lib/finance-money";
 
@@ -16,7 +17,8 @@ interface InvoiceRow {
   balanceDueMinor: number;
 }
 
-export function FinanceList({ canManage }: { canManage: boolean }) {
+export function FinanceList({ options }: { options: Awaited<ReturnType<typeof getFinanceDocumentOptions>> | null }) {
+  const canManage = options !== null;
   const { data, isPending, isError } = useQuery({
     queryKey: ["invoices"],
     queryFn: async (): Promise<{ items: InvoiceRow[] }> => {
@@ -29,7 +31,7 @@ export function FinanceList({ canManage }: { canManage: boolean }) {
   return (
     <div className="flex flex-col gap-6 p-6">
       <PageHeader title="Invoices" description="Track issued invoices, balances, overdue status, and payment allocations." />
-      {canManage && <FinanceDocumentForm kind="invoices" />}
+      {options && <FinanceDocumentForm kind="invoices" options={options} />}
       {isPending && <p role="status">Loading invoices?</p>}
       {isError && <p role="alert">Could not load invoices.</p>}
       {data?.items.length === 0 && <p className="text-muted-foreground">No invoices yet.</p>}

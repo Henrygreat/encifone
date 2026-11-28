@@ -1,4 +1,5 @@
 "use client";
+import type { getFinanceDocumentOptions } from "@/modules/finance/service";
 
 import { formatFinanceMoney as money } from "@/lib/finance-money";
 
@@ -15,7 +16,8 @@ interface EstimateRow {
   versions: Array<{ totalMinor: number }>;
 }
 
-export function FinanceList({ canManage }: { canManage: boolean }) {
+export function FinanceList({ options }: { options: Awaited<ReturnType<typeof getFinanceDocumentOptions>> | null }) {
+  const canManage = options !== null;
   const { data, isPending, isError } = useQuery({
     queryKey: ["estimates"],
     queryFn: async (): Promise<{ items: EstimateRow[] }> => {
@@ -28,7 +30,7 @@ export function FinanceList({ canManage }: { canManage: boolean }) {
   return (
     <div className="flex flex-col gap-6 p-6">
       <PageHeader title="Estimates" description="Create, send, accept and convert quotes while preserving historical pricing." />
-      {canManage && <FinanceDocumentForm kind="estimates" />}
+      {options && <FinanceDocumentForm kind="estimates" options={options} />}
       {isPending && <p role="status">Loading estimates?</p>}
       {isError && <p role="alert">Could not load estimates.</p>}
       {data?.items.length === 0 && <p className="text-muted-foreground">No estimates yet.</p>}

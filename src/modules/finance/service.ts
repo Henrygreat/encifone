@@ -1668,6 +1668,51 @@ export async function listFinancialAudit(acting: ActiveMembership) {
   });
 }
 
+export async function listFinancePayments(acting: ActiveMembership, page: number) {
+  requireFinanceView(acting);
+  const where = { organisationId: acting.organisationId };
+  const [items, total] = await Promise.all([
+    prisma.payment.findMany({
+      where,
+      skip: (page - 1) * 25,
+      take: 25,
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      select: {
+        id: true, createdAt: true, receivedAt: true, currency: true, amountMinor: true,
+        method: true, status: true, externalReference: true,
+        opportunity: { select: { name: true, organisationId: true } },
+        allocations: {
+          where,
+          select: { id: true, amountMinor: true, invoice: { select: { id: true, invoiceNumber: true, organisationId: true } } },
+        },
+      },
+    }),
+    prisma.payment.count({ where }),
+  ]);
+  return {
+    totalPages: Math.max(1, Math.ceil(total / 25)),
+    items: items.map((item) => ({
+      ...item,
+      opportunity: item.opportunity?.organisationId === acting.organisationId ? item.opportunity : null,
+      allocations: item.allocations.filter(({ invoice }) => invoice.organisationId === acting.organisationId),
+    })),
+  };
+}
+
+export async function getFinanceDocumentOptions(acting: ActiveMembership) {
+  requireFinanceManage(acting);
+  const organisationId = acting.organisationId;
+  const [clients, projects, services] = await Promise.all([
+    prisma.client.findMany({ where: { organisationId, deletedAt: null }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
+    prisma.project.findMany({ where: { organisationId, archivedAt: null }, orderBy: { name: "asc" }, select: { id: true, name: true, clientId: true } }),
+    prisma.serviceItem.findMany({
+      where: { organisationId, deletedAt: null, status: "ACTIVE" },
+      orderBy: { name: "asc" }, select: { id: true, name: true, currency: true, unitPriceMinor: true },
+    }),
+  ]);
+  return { clients, projects, services };
+}
+
 export async function getFinancialMetrics(acting: ActiveMembership) {
   requireFinanceView(acting);
   const now = new Date();

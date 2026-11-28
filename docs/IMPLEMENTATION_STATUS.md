@@ -437,8 +437,16 @@ New reusable components (`src/components/ui/`): `PageHeader`, `MetricCard`, `Spa
 - **The brief's "Phase 5" (roadmap's real Phase 3 — Client Portal + Onboarding) has not been started.** This is the one genuinely large net-new module left: portal invitation/auth, client-scoped data isolation (a new tenant-isolation surface distinct from the existing org-membership model), document storage with expiring signed URLs, and an onboarding-template engine. Flagged to the owner as a scope/sequencing decision rather than started unprompted mid-session, given its size and security surface.
 
 
-## Phase 4 ? Operational finance (2026-11-27)
+## Phase 4 operational finance (2026-11-27)
 
 Implemented and validated locally on `feature/phase-4-complete-implementation` in `42268707704f5b56ebc77c20800e8b02a2081e60`. The existing project, request and time-entry modules now feed approved-work invoice drafts. The finance workflows cover estimate conversion, invoice issuance and PDF, manual payment allocation and credit notes, expenses, scheduled subscription and retainer billing, portal finance, base-currency reporting, forecasts and dashboard MRR.
 
 All 116 Vitest tests passed. Two authenticated Chromium workflows passed against the standalone Docker app, covering staff draft-to-payment and client portal estimate-to-invoice access. The app readiness check returned HTTP 200, and the healthy worker registered and completed a scheduled recurring billing job. Prisma applied all 16 migrations to a fresh local database and reported no schema drift. The [Phase 4 Capstone Report](PHASE_4_CAPSTONE_REPORT.md) records security coverage, warnings, migration order, operational limits and release gates.
+
+### Finance navigation and readiness audit (2026-11-28)
+
+The feature branch, local `master` and live GitHub `master` were at `8bcbcc9` at audit start. All eight finance navigation entries lacked destinations in the shared sidebar and command palette configuration. Seven implemented pages were unreachable through the sidebar, and Payments lacked a page.
+
+The feature branch now links all eight pages. Payments reads the organisation ledger and invoice allocations with finance access. The CRM payment-list endpoint continues listing Stripe deposits under CRM permissions and excludes manual finance records. Estimate and invoice forms use tenant-scoped client, project and service catalogue choices. The dashboard reports MRR, recorded collections and outstanding receivables from database records in the organisation’s base currency.
+
+Schema validation, client generation, migration status and drift checks, typecheck, lint, all 116 Vitest tests and the production build passed. Three authenticated Chromium workflows verified navigation to every finance page, catalogue pricing, a non-zero database-backed MRR, the staff invoice and payment ledger workflow, and client portal acceptance and PDF isolation. No new environment variables or migrations were added in this follow-up. See the [deployment instructions](PHASE_4_CAPSTONE_REPORT.md#navigation-follow-up-and-deployment) for the manual release sequence.
