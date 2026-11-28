@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHmac, randomUUID } from "node:crypto";
 import { afterAll, expect, it, vi } from "vitest";
 import { Webhook } from "svix";
 import { prisma } from "@/lib/prisma";
@@ -10,6 +10,9 @@ import { membershipIdFor } from "../helpers/membership";
 import { configureMailbox, InvalidMailWebhook, listMailboxes, manageMailbox, receiveMailboxEvent } from "@/modules/inbox/email";
 import { cancelAppointment, listAppointments, saveAppointment, sendDueAppointmentReminders } from "@/modules/inbox/appointments";
 import { suggestCommunication } from "@/modules/inbox/assistant";
+import { env } from "@/lib/env";
+import { InvalidSmsWebhook, listSmsNumbers, recordTwilioWebhook, saveSmsNumber } from "@/modules/inbox/sms";
+import { smsSegmentEstimate } from "@/modules/inbox/sms-gateway";
 
 const owners: ActiveMembership[] = [];
 async function owner(): Promise<ActiveMembership> {
@@ -26,6 +29,53 @@ afterAll(async () => {
     await prisma.auditLog.deleteMany({ where: { organisationId: item.organisationId } });
     await prisma.organisation.delete({ where: { id: item.organisationId } });
     await prisma.user.delete({ where: { id: item.userId } });
+  }
+});
+
+it("verifies Twilio events and prevents duplicate sends and replies after opt-out with a mocked provider", async () => {
+  const [staff, foreign] = await Promise.all([owner(), owner()]);
+  const number = "+12025550134";
+  const visitor = "+12025550135";
+  const accountSid = "AC" + "a".repeat(32);
+  const token = "b".repeat(32);
+  const outbound = "SM" + "c".repeat(32);
+  const provider = vi.fn(async (_url: string, init?: RequestInit) => init?.method === "POST"
+    ? Response.json({ sid: outbound })
+    : Response.json({ incoming_phone_numbers: [{ phone_number: number, capabilities: { sms: true } }] }));
+  vi.stubGlobal("fetch", provider);
+  try {
+    await saveSmsNumber(staff, { number, accountSid, token });
+    const [configured] = await listSmsNumbers(staff);
+    expect(configured).not.toHaveProperty("encryptedToken");
+    expect(await listSmsNumbers(foreign)).toEqual([]);
+    const input = new URLSearchParams({ To: number, From: visitor, MessageSid: "SM" + "d".repeat(32), AccountSid: accountSid, Body: "Hello" });
+    const signature = (fields: URLSearchParams, message?: string) => {
+      const url = new URL(`/api/v1/webhooks/inbox-sms/${configured.publicKey}`, env.APP_URL);
+      if (message) url.searchParams.set("message", message);
+      fields.sort();
+      return createHmac("sha1", token).update(url.toString() + [...fields].map(([key, value]) => key + value).join("")).digest("base64");
+    };
+    await expect(recordTwilioWebhook(configured.publicKey, input, "forged")).rejects.toBeInstanceOf(InvalidSmsWebhook);
+    await Promise.all([1, 2].map(() => recordTwilioWebhook(configured.publicKey, input, signature(input))));
+    const [thread] = (await listInbox(staff, { page: 1 })).items;
+    expect(thread).toMatchObject({ customerPhone: visitor, unread: 1 });
+    const reply = { kind: "OUTBOUND" as const, body: "Support reply", version: thread.version, requestKey: randomUUID() };
+    await expect(replyToConversation(foreign, thread.id, reply)).rejects.toThrow(/not found/i);
+    const sent = await replyToConversation(staff, thread.id, reply);
+    await replyToConversation(staff, thread.id, reply);
+    expect(provider.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(1);
+    const status = new URLSearchParams({ To: visitor, From: number, MessageSid: outbound, AccountSid: accountSid, MessageStatus: "delivered" });
+    await recordTwilioWebhook(configured.publicKey, status, signature(status, sent.id), sent.id);
+    expect((await prisma.inboxMessage.findUniqueOrThrow({ where: { id: sent.id } })).delivery).toBe("DELIVERED");
+    input.set("MessageSid", "SM" + "e".repeat(32));
+    input.set("Body", "STOP");
+    await recordTwilioWebhook(configured.publicKey, input, signature(input));
+    await expect(replyToConversation(staff, thread.id, { ...reply, requestKey: randomUUID() })).rejects.toHaveProperty("issues");
+    expect(provider.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(1);
+    expect(smsSegmentEstimate("a".repeat(161))).toBe(2);
+    expect(smsSegmentEstimate("😀".repeat(36))).toBe(2);
+  } finally {
+    vi.unstubAllGlobals();
   }
 });
 

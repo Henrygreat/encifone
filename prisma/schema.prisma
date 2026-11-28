@@ -78,6 +78,7 @@ model Organisation {
   chatWidgets ChatWidget[]
   inboxMailboxes InboxMailbox[]
   appointments Appointment[]
+  inboxSmsNumbers InboxSmsNumber[]
   id              String   @id @default(cuid())
   name            String
   slug            String   @unique
@@ -226,6 +227,9 @@ model InboxConversation {
   subject        String
   customerName   String?
   customerEmail  String?
+  customerPhone  String?
+  smsNumberId    String?
+  smsNumber      InboxSmsNumber? @relation(fields: [smsNumberId], references: [id], onDelete: SetNull)
   assigneeId     String?
   tags           String[] @default([])
   unread         Int @default(0)
@@ -258,11 +262,40 @@ model InboxMessage {
   providerId     String?
   internetId     String?
   delivery       InboxDelivery?
+  smsNumberId     String?
+  smsNumber       InboxSmsNumber? @relation(fields: [smsNumberId], references: [id], onDelete: SetNull)
+  smsSegments     Int?
 
   @@unique([conversationId, requestKey])
   @@unique([mailboxId, providerId])
+  @@unique([smsNumberId, providerId])
   @@index([mailboxId, internetId])
   @@index([conversationId, createdAt, id])
+}
+
+model InboxSmsNumber {
+  id              String @id @default(cuid())
+  organisationId  String
+  organisation    Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  publicKey       String @unique @default(uuid())
+  number          String
+  accountSid      String
+  encryptedToken  String?
+  enabled         Boolean @default(true)
+  lastSyncAt      DateTime?
+  conversations   InboxConversation[]
+  messages        InboxMessage[]
+  consent         InboxSmsConsent[]
+  @@unique([organisationId, number])
+}
+
+model InboxSmsConsent {
+  smsNumberId     String
+  smsNumber       InboxSmsNumber @relation(fields: [smsNumberId], references: [id], onDelete: Cascade)
+  recipient       String
+  optedOut        Boolean @default(false)
+  updatedAt       DateTime @updatedAt
+  @@id([smsNumberId, recipient])
 }
 
 enum InboxDelivery {

@@ -109,14 +109,14 @@ export function InboxWorkspace({ initial, scope, canManage, canConfigure, member
               <Label><input type="checkbox" checked={snoozed} onChange={(event) => { setSnoozed(event.target.checked); setPage(1); }} /> Include snoozed</Label>
             </div>
             {list.isError && <p role="alert">The inbox could not be loaded.</p>}
-            {list.isPending && <p role="status">Loading conversations…</p>}
+            {list.isPending && <p role="status">Loading conversationsâ€¦</p>}
             {list.data?.items.length === 0 && <p className="text-sm text-muted-foreground">No conversations match.</p>}
             <ul className="max-h-[55vh] space-y-1 overflow-y-auto">
               {list.data?.items.map((item) => <li key={item.id}>
                 <button type="button" aria-pressed={selected === item.id} onClick={() => open(item.id)}
                   className="w-full rounded-md border px-3 py-2 text-left text-sm hover:bg-muted aria-pressed:bg-muted">
-                  <span className="block break-words font-medium">{item.customerName || item.customerEmail || item.subject}</span>
-                  <span className="text-xs text-muted-foreground">{item.channel} · {item.status.toLowerCase()}{item.unread ? ` · ${item.unread} unread` : ""}</span>
+                  <span className="block break-words font-medium">{item.customerName || item.customerEmail || item.customerPhone || item.subject}</span>
+                  <span className="text-xs text-muted-foreground">{item.channel} Â· {item.status.toLowerCase()}{item.unread ? ` Â· ${item.unread} unread` : ""}</span>
                 </button>
               </li>)}
             </ul>
@@ -131,7 +131,7 @@ export function InboxWorkspace({ initial, scope, canManage, canConfigure, member
           <CardContent className="space-y-3">
             {!selected && <p className="text-sm text-muted-foreground">Select a conversation to read or reply.</p>}
             {thread.isError && <p role="alert">The conversation could not be loaded.</p>}
-            {selected && thread.isPending && <p role="status">Loading conversation…</p>}
+            {selected && thread.isPending && <p role="status">Loading conversationâ€¦</p>}
             {data && conversation && <>
               <div className="flex flex-wrap gap-2">
                 {data.hasOlder && <Button variant="outline" size="sm" onClick={() => setBefore(data.messages[0].id)}>Older messages</Button>}
@@ -140,13 +140,13 @@ export function InboxWorkspace({ initial, scope, canManage, canConfigure, member
               </div>
               <ol className="max-h-[55vh] space-y-2 overflow-y-auto">
                 {data.messages.map((message) => <li key={message.id} className="rounded-md border p-3">
-                  <p className="text-xs text-muted-foreground">{message.kind === "NOTE" ? "Internal note" : message.kind === "INBOUND" ? "Customer" : "Staff reply"} · {new Date(message.createdAt).toLocaleString()}{message.delivery ? ` · ${message.delivery.toLowerCase()}` : ""}</p>
+                  <p className="text-xs text-muted-foreground">{message.kind === "NOTE" ? "Internal note" : message.kind === "INBOUND" ? "Customer" : "Staff reply"} Â· {new Date(message.createdAt).toLocaleString()}{message.delivery ? ` Â· ${message.delivery.toLowerCase()}` : ""}</p>
                   <p className="whitespace-pre-wrap break-words text-sm">{message.body}</p>
                 </li>)}
               </ol>
               {canManage && <form key={selected} onSubmit={reply} className="space-y-2">
                 <Label className="grid gap-1">Message type<select name="kind" className={selectClass}>
-                  {["OPEN", "PENDING"].includes(conversation.status) && ["CHAT", "EMAIL"].includes(conversation.channel) && <option value="OUTBOUND">Customer reply</option>}
+                  {["OPEN", "PENDING"].includes(conversation.status) && ["CHAT", "EMAIL", "SMS"].includes(conversation.channel) && <option value="OUTBOUND">Customer reply</option>}
                   <option value="NOTE">Internal note</option>
                 </select></Label>
                 <Label className="grid gap-1">Message<textarea ref={composer} required rows={4} maxLength={6000} name="body" className="w-full rounded-md border bg-background p-2 text-sm" /></Label>
@@ -168,17 +168,18 @@ export function InboxWorkspace({ initial, scope, canManage, canConfigure, member
             {!conversation && <p className="text-muted-foreground">Customer information appears here when a conversation is selected.</p>}
             {conversation && <>
               <p className="break-words">{conversation.customerName || "Anonymous visitor"}</p>
-              {conversation.customerEmail && <p className="break-all text-muted-foreground">{conversation.customerEmail} · unverified sender address</p>}
-              {data.contact && <p>CRM contact · {data.contact.firstName} {data.contact.lastName}</p>}
+              {conversation.customerPhone && <p>{conversation.customerPhone}</p>}
+              {conversation.customerEmail && <p className="break-all text-muted-foreground">{conversation.customerEmail} Â· unverified sender address</p>}
+              {data.contact && <p>CRM contact Â· {data.contact.firstName} {data.contact.lastName}</p>}
               {data.company && <p className="break-words">{data.company.name}</p>}
               {Boolean(data.opportunities.length) && <div><p className="font-medium">Open opportunities</p>{data.opportunities.map((item) => <p key={item.id}>{item.name}</p>)}</div>}
               {Boolean(data.projects.length) && <div><p className="font-medium">Active projects</p>{data.projects.map((item) => <p key={item.id}>{item.name}</p>)}</div>}
-              {Boolean(data.tickets.length) && <div><p className="font-medium">Support tickets</p>{data.tickets.map((item) => <p key={item.id}>{item.reference} · {item.subject}</p>)}</div>}
+              {Boolean(data.tickets.length) && <div><p className="font-medium">Support tickets</p>{data.tickets.map((item) => <p key={item.id}>{item.reference} Â· {item.subject}</p>)}</div>}
               {Boolean(data.invoices.length) && <div><p className="font-medium">Outstanding invoices</p>{data.invoices.map((item) => <p key={item.id}>
-                <Link href={`/invoices/${item.id}`} className="underline">Invoice {item.invoiceNumber}</Link> · {formatFinanceMoney(item.balanceDueMinor, item.currency)}
+                <Link href={`/invoices/${item.id}`} className="underline">Invoice {item.invoiceNumber}</Link> Â· {formatFinanceMoney(item.balanceDueMinor, item.currency)}
               </p>)}</div>}
               {Boolean(data.previous.length) && <div><p className="font-medium">Previous conversations</p>{data.previous.map((item) =>
-                <Button key={item.id} variant="link" onClick={() => open(item.id)}>{item.subject} · {new Date(item.updatedAt).toLocaleDateString()}</Button>)}</div>}
+                <Button key={item.id} variant="link" onClick={() => open(item.id)}>{item.subject} Â· {new Date(item.updatedAt).toLocaleDateString()}</Button>)}</div>}
               {canManage && <>
                 <Button asChild variant="outline" size="sm"><Link href={`/calendar?conversation=${conversation.id}`}>Create appointment</Link></Button>
                 <Label className="grid gap-1">Status<select disabled={busy} className={selectClass} value={conversation.status} onChange={(event) => void mutate("PATCH", { status: event.target.value })}>

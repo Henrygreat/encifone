@@ -7,6 +7,7 @@ import { NotFoundError, ValidationError } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import { requireCapability } from "@/modules/operations/auth";
 import { sendMailboxReply } from "./email";
+import { sendSmsReply } from "./sms";
 
 export const updateConversationSchema = z.object({
   status: z.enum(["OPEN", "PENDING", "RESOLVED", "ARCHIVED"]).optional(),
@@ -46,7 +47,7 @@ export async function listInbox(acting: ActiveMembership, filter: z.infer<typeof
     tags: filter.tag ? { has: filter.tag } : undefined,
     AND: [
       ...(filter.showSnoozed ? [] : [{ OR: [{ snoozedUntil: null }, { snoozedUntil: { lte: new Date() } }] }]),
-      ...(filter.search ? [{ OR: ["subject", "customerName", "customerEmail"].map((key) =>
+      ...(filter.search ? [{ OR: ["subject", "customerName", "customerEmail", "customerPhone"].map((key) =>
         ({ [key]: { contains: filter.search, mode: "insensitive" } })) }] : []),
     ],
   };
@@ -142,6 +143,9 @@ export async function updateInboxConversation(acting: ActiveMembership, id: stri
 
 export async function replyToConversation(acting: ActiveMembership, id: string, input: z.infer<typeof replySchema>) {
   requireCapability(acting, Capability.INBOX_MANAGE);
+  if (input.kind === "OUTBOUND" && await prisma.inboxConversation.findFirst({
+    where: { id, organisationId: acting.organisationId, channel: "SMS" }, select: { id: true },
+  })) return sendSmsReply(acting, id, input);
   if (input.kind === "OUTBOUND" && await prisma.inboxConversation.findFirst({
     where: { id, organisationId: acting.organisationId, channel: "EMAIL" }, select: { id: true },
   })) return sendMailboxReply(acting, id, input);

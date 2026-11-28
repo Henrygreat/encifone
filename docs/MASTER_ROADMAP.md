@@ -93,6 +93,8 @@ Scope: Bento dashboard with real computed KPIs (not mocked), AI Command Centre a
 
 **→ End of Phase 5 = MVP complete, vertical slice fully demonstrable.** Re-evaluate priorities with real/pilot customer feedback before Phase 6.
 
+The owner-directed communications extension spans work listed in this Phase 6+ sequence. The extension is partially implemented. The [communications capstone](PHASE_5_CAPSTONE_REPORT.md) records its delivered scope, open milestones and validation. The original Phase 5 acceptance criteria above still apply.
+
 ### Phase 6+ (indicative order, to be re-prioritised post-MVP feedback)
 6. Helpdesk depth (SLAs, routing, canned responses) + Universal Inbox (email channel first)
 7. Client Profitability Engine + Revenue Leakage Detector
