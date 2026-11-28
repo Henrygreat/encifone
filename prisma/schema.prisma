@@ -74,6 +74,8 @@ model User {
 }
 
 model Organisation {
+  inboxConversations InboxConversation[]
+  chatWidgets ChatWidget[]
   id              String   @id @default(cuid())
   name            String
   slug            String   @unique
@@ -157,6 +159,100 @@ model Organisation {
   subscriptionEvents  SubscriptionEvent[]
   retainers           Retainer[]
   retainerUsages      RetainerUsage[]
+}
+
+enum InboxChannel {
+  CHAT
+  EMAIL
+  SMS
+  WHATSAPP
+}
+
+enum InboxStatus {
+  OPEN
+  PENDING
+  RESOLVED
+  ARCHIVED
+}
+
+enum InboxPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum InboxMessageKind {
+  INBOUND
+  OUTBOUND
+  NOTE
+}
+
+model InboxConversation {
+  id             String @id @default(cuid())
+  organisationId String
+  organisation   Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  channel        InboxChannel
+  status         InboxStatus @default(OPEN)
+  priority       InboxPriority @default(NORMAL)
+  subject        String
+  customerName   String?
+  customerEmail  String?
+  assigneeId     String?
+  tags           String[] @default([])
+  unread         Int @default(0)
+  version        Int @default(0)
+  snoozedUntil   DateTime?
+  firstReplyAt   DateTime?
+  resolvedAt     DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  messages       InboxMessage[]
+  visitor        ChatVisitor?
+
+  @@index([organisationId, status, updatedAt])
+  @@index([organisationId, assigneeId])
+}
+
+model InboxMessage {
+  id             String @id @default(cuid())
+  conversationId String
+  conversation   InboxConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  kind           InboxMessageKind
+  body           String
+  authorId       String?
+  requestKey     String
+  createdAt      DateTime @default(now())
+
+  @@unique([conversationId, requestKey])
+  @@index([conversationId, createdAt, id])
+}
+
+model ChatWidget {
+  id             String @id @default(cuid())
+  publicKey      String @unique @default(uuid())
+  organisationId String
+  organisation   Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  name           String
+  welcome        String
+  colour         String
+  origins        String[]
+  privacyNotice  String
+  position       String @default("right")
+  enabled        Boolean @default(true)
+  visitors       ChatVisitor[]
+
+  @@unique([organisationId])
+}
+
+model ChatVisitor {
+  id             String @id @default(cuid())
+  widgetId       String
+  widget         ChatWidget @relation(fields: [widgetId], references: [id], onDelete: Cascade)
+  conversationId String @unique
+  conversation   InboxConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  tokenHash      String @unique
+  expiresAt      DateTime
 }
 
 enum MembershipRole {

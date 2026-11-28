@@ -19,7 +19,7 @@ export class RateLimitError extends Error {
   }
 }
 
-export async function checkRateLimit(key: string, limit: number, windowSeconds: number): Promise<void> {
+export async function checkRateLimit(key: string, limit: number, windowSeconds: number, failClosed = false): Promise<void> {
   const redisKey = `ratelimit:${key}`;
   try {
     const count = await redis.incr(redisKey);
@@ -32,6 +32,7 @@ export async function checkRateLimit(key: string, limit: number, windowSeconds: 
     }
   } catch (error) {
     if (error instanceof RateLimitError) throw error;
+    if (failClosed) throw new Error("Rate limiting unavailable.");
     // Redis unreachable or another transient error — never let a
     // rate-limiter outage take down an otherwise-healthy endpoint.
     console.error("Rate limit check failed open:", error instanceof Error ? error.message : error);

@@ -71,7 +71,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { label: "Home", href: "/dashboard", icon: LayoutDashboard },
       { label: "My Work", href: "/my-work", icon: CheckSquare },
       { label: "AI Command Centre", icon: Sparkles },
-      { label: "Universal Inbox", icon: Inbox },
+      { label: "Universal Inbox", href: "/inbox", icon: Inbox },
       { label: "Calendar", href: "/calendar", icon: CalendarDays },
     ],
   },

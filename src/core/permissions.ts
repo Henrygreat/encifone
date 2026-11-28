@@ -45,6 +45,8 @@ export enum Capability {
   ASSET_MANAGE = "asset:manage",
   FINANCE_VIEW = "finance:view",
   FINANCE_MANAGE = "finance:manage",
+  INBOX_VIEW = "inbox:view",
+  INBOX_MANAGE = "inbox:manage",
   ANALYTICS_VIEW = "analytics:view",
 }
 
@@ -52,6 +54,8 @@ const ROLE_CAPABILITIES: Record<MembershipRole, Capability[]> = {
   PLATFORM_SUPER_ADMIN: Object.values(Capability),
   ORGANISATION_OWNER: Object.values(Capability),
   ORGANISATION_ADMIN: [
+    Capability.INBOX_VIEW,
+    Capability.INBOX_MANAGE,
     Capability.ORG_VIEW_MEMBERS,
     Capability.ORG_MANAGE_MEMBERS,
     Capability.ORG_UPDATE_SETTINGS,
@@ -188,6 +192,8 @@ const ROLE_CAPABILITIES: Record<MembershipRole, Capability[]> = {
     Capability.ANALYTICS_VIEW,
   ],
   TEAM_MEMBER: [
+    Capability.INBOX_VIEW,
+    Capability.INBOX_MANAGE,
     Capability.ORG_VIEW_MEMBERS,
     Capability.CRM_VIEW,
     Capability.PORTAL_VIEW,
